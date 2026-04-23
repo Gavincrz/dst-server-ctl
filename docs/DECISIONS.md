@@ -1,22 +1,21 @@
-# Decisions
+# 决策
 
-## 2026-04-23: No Docker Core
+## 2026-04-23：核心路径不使用 Docker
 
-The project will not use Docker for the core deployment path. The controller installs and manages a native DST dedicated server under its own managed root.
+项目核心部署路径不使用 Docker。控制器在自己的 managed root 下安装并管理原生 DST 专用服务器。
 
-## 2026-04-23: Go + Svelte
+## 2026-04-23：Go + Svelte
 
-The backend is Go. The frontend is Svelte. Release artifacts should become a single Go binary with embedded static assets after the UI build pipeline is connected.
+后端使用 Go，前端使用 Svelte。UI 构建管线接好后，发布产物应是一个嵌入静态资源的 Go 单二进制。
 
-## 2026-04-23: SQLite State
+## 2026-04-23：SQLite 状态存储
 
-Controller state uses SQLite. DST-native configuration remains as generated files under the managed root.
+控制器状态使用 SQLite。DST 原生配置仍以生成文件形式保存在 managed root 下。
 
-## 2026-04-23: Structured Configuration Source
+## 2026-04-23：结构化配置为源
 
-The UI and API manage structured controller state. DST config files are generated from that state instead of edited in place.
+UI 和 API 管理结构化控制器状态。DST 配置文件由该状态生成，不做原地编辑。
 
-## 2026-04-23: Controller-Managed Processes
+## 2026-04-23：控制器管理进程
 
-The controller directly starts, stops, and monitors DST Master and Caves processes. systemd may manage the controller process later, but not the shard lifecycle in the first architecture.
-
+控制器直接启动、停止、监控 DST Master 和 Caves 进程。systemd 之后可以管理控制器进程本身，但首版架构中不负责 shard 生命周期。

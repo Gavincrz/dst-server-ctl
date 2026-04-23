@@ -1,52 +1,51 @@
-# Roadmap
+# 路线图
 
-## Phase 0: Harness and Skeleton
+## 阶段 0：Harness 和骨架
 
-- Establish agent instructions and architecture documents.
-- Create Go backend skeleton with package boundaries.
-- Create Svelte frontend skeleton.
-- Add tests for safe path and command-runner primitives.
+- 建立 agent 指令和架构文档。
+- 创建带 package 边界的 Go 后端骨架。
+- 创建 Svelte 前端骨架。
+- 添加路径安全和 command runner 基础测试。
 
-## Phase 1: Managed Installation MVP
+## 阶段 1：受管安装 MVP
 
-- Initialize managed root.
-- Download/install SteamCMD.
-- Install DST app `343050`.
-- Persist install state in SQLite.
-- Show install status in the web UI.
+- 初始化 managed root。
+- 下载/安装 SteamCMD。
+- 安装 DST app `343050`。
+- 将安装状态持久化到 SQLite。
+- 在 Web UI 显示安装状态。
 
-## Phase 2: Server Lifecycle MVP
+## 阶段 2：服务器生命周期 MVP
 
-- Create one managed cluster with Master and Caves.
-- Generate core `cluster.ini` and `server.ini` files.
-- Start, stop, restart, and inspect shard status.
-- Stream Master and Caves logs in the UI.
+- 创建一个包含 Master 和 Caves 的受管 cluster。
+- 生成核心 `cluster.ini` 和 `server.ini`。
+- 启动、停止、重启，并查看 shard 状态。
+- 在 UI 中流式查看 Master 和 Caves 日志。
 
-## Phase 3: Updates
+## 阶段 3：更新
 
-- Run manual SteamCMD updates.
-- Check local and remote version state.
-- Add daily scheduled update checks.
-- Require explicit confirmation before stopping a running world for update.
+- 手动执行 SteamCMD 更新。
+- 检查本地和远端版本状态。
+- 添加每日定时更新检查。
+- 更新运行中的世界前必须显式确认停服。
 
-## Phase 4: World and Server Config UI
+## 阶段 4：世界和服务器配置 UI
 
-- Configure server name, description, password, language, max players, PvP, pause behavior, and game mode.
-- Manage token input without echoing the token.
-- Manage admin, block, and allow lists.
-- Add world templates and generated `leveldataoverride.lua`.
+- 配置服务器名、描述、密码、语言、人数、PvP、暂停行为、游戏模式。
+- 管理 token 输入，但不回显 token。
+- 管理 admin、block、allow 列表。
+- 添加世界模板和生成的 `leveldataoverride.lua`。
 
-## Phase 5: Mod Management
+## 阶段 5：模组管理
 
-- Add Workshop IDs and generate `dedicated_server_mods_setup.lua`.
-- Update/download mods.
-- Read local `modinfo.lua` metadata after download.
-- Generate visual forms for supported `configuration_options`.
-- Generate `modoverrides.lua` for Master and Caves.
+- 添加 Workshop ID，并生成 `dedicated_server_mods_setup.lua`。
+- 更新/下载模组。
+- 下载后读取本地 `modinfo.lua` 元数据。
+- 为支持的 `configuration_options` 生成可视化表单。
+- 为 Master 和 Caves 生成 `modoverrides.lua`。
 
-## Phase 6: Packaging
+## 阶段 6：发布打包
 
-- Add release builds for Linux amd64/arm64.
-- Add optional installer script.
-- Add clean uninstall workflow with prompts to preserve or delete worlds, saves, mods, and DST install files.
-
+- 添加 Linux amd64/arm64 release 构建。
+- 添加可选安装脚本。
+- 添加干净卸载流程，并提示用户选择保留或删除世界、存档、模组和 DST 安装文件。

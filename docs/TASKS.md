@@ -1,43 +1,43 @@
-# Tasks
+# 任务
 
-## Current State
+## 当前状态
 
-- [x] Initialize git repository.
-- [x] Add harness documentation.
-- [x] Add backend skeleton.
-- [x] Add frontend skeleton.
-- [x] Add initial tests for path and command primitives.
-- [x] Configure local Go toolchain and verify backend tests.
+- [x] 初始化 git 仓库。
+- [x] 添加 harness 文档。
+- [x] 添加 Go 后端骨架。
+- [x] 添加 Svelte 前端骨架。
+- [x] 添加路径布局和 command runner 的基础测试。
+- [x] 配置本机 Go 工具链，并验证后端测试。
 
-The project is ready for the first product implementation iteration. Current code is a harness and skeleton only; it does not install or manage DST yet.
+当前项目只有 harness 和工程骨架，还没有实现 DST 安装或管理能力。下一步可以进入第一个产品功能迭代。
 
-## Next Task
+## 下一任务
 
-- [ ] Add SQLite migration layer and state repository interfaces.
+- [ ] 添加 SQLite migration 层和状态仓储接口。
 
-## Backlog
+## 后续任务
 
-- [ ] Define install status API and managed root initialization.
-- [ ] Implement SteamCMD installer planning and task model.
-- [ ] Add first Svelte status page wired to backend `/api/v1/status`.
+- [ ] 定义安装状态 API 和 managed root 初始化流程。
+- [ ] 实现 SteamCMD 安装计划和任务模型。
+- [ ] 添加第一个 Svelte 状态页，并接入后端 `/api/v1/status`。
 
-## Do Not Do Yet
+## 暂时不要做
 
-- Do not add Docker support.
-- Do not import, migrate, or mutate the manual DST install under `/home/dontstarve/dst-server`.
-- Do not build the full mod-management UI before the managed install, state, and process lifecycle are in place.
-- Do not expose the web UI on a public interface by default.
+- 不要添加 Docker 支持。
+- 不要导入、迁移或修改 `/home/dontstarve/dst-server` 下的手动 DST 部署。
+- 在 managed install、状态存储、进程生命周期完成前，不要提前做完整模组管理 UI。
+- 默认不要把 Web UI 暴露到公网网卡。
 
-## Completion Checklist
+## 完成检查
 
-- [ ] Relevant backend/frontend checks have been run.
-- [ ] Go files touched in the iteration have been formatted.
-- [ ] Architecture or decision docs have been updated if boundaries or technical choices changed.
-- [ ] This file reflects completed work and the next task.
-- [ ] Changes have been committed with a focused message.
+- [ ] 已运行相关后端/前端检查。
+- [ ] 本次改过的 Go 文件已格式化。
+- [ ] 若边界或技术决策变化，已更新架构或决策文档。
+- [ ] 本文件已反映完成内容和下一任务。
+- [ ] 未经用户明确要求，没有提交 commit。
 
-## Open Questions
+## 未决问题
 
-- Exact installer script UX.
-- Whether admin token should be file-only, env-overridable, or both.
-- How much of `leveldataoverride.lua` should be visual in the first public release.
+- 安装脚本的具体交互体验。
+- admin token 应该只存在文件里，还是也允许环境变量覆盖。
+- 第一版公开发布时，`leveldataoverride.lua` 要做到多完整的可视化。

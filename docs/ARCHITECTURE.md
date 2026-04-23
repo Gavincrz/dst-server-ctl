@@ -1,35 +1,35 @@
-# Architecture
+# 架构
 
-## Overview
+## 概览
 
-`dst-server-ctl` is a single-binary controller for one managed Don't Starve Together dedicated server installation. It installs and updates DST with SteamCMD, generates DST configuration files from structured controller state, runs Master and Caves processes, streams logs, and exposes a local web UI.
+`dst-server-ctl` 是一个单二进制 DST 服务器控制器，用来管理一个受管的 Don't Starve Together 专用服务器实例。它通过 SteamCMD 安装和更新 DST，从结构化状态生成 DST 配置文件，启动 Master/Caves 进程，读取日志，并提供本地 Web UI。
 
-The controller does not manage or mutate existing manual DST installations. All managed data is stored under a dedicated managed root, defaulting to `$XDG_DATA_HOME/dst-server-ctl` or `~/.local/share/dst-server-ctl`.
+控制器不接管、不修改用户已有的手动 DST 部署。所有受管数据都放在独立 managed root 中，默认使用 `$XDG_DATA_HOME/dst-server-ctl`，没有该环境变量时使用 `~/.local/share/dst-server-ctl`。
 
-## Backend Layers
+## 后端分层
 
-- `domain`: core types such as install layout, world, shard, mod, task, and server status.
-- `service`: use-case orchestration such as install, update, start, stop, world selection, and config rendering.
-- `adapter`: integrations with filesystem, process runner, SteamCMD, SQLite, log tailing, and DST config writers.
-- `http`: API routing, request validation, authentication, and response shaping.
+- `domain`：核心概念，例如安装布局、世界、shard、mod、任务、服务器状态。
+- `service`：用例编排，例如安装、更新、启动、停止、世界选择、配置渲染。
+- `adapter`：外部集成，例如文件系统、进程 runner、SteamCMD、SQLite、日志 tail、DST 配置 writer。
+- `http`：API 路由、请求校验、认证、响应格式。
 
-Dependencies point inward: HTTP calls services, services use domain types and adapter interfaces, adapters implement external effects.
+依赖方向向内：HTTP 调 service，service 使用 domain 类型和 adapter 接口，adapter 实现外部副作用。
 
-## Runtime Data
+## 运行时数据
 
-Controller state is stored in SQLite. DST-native files are generated into the managed root from structured state.
+控制器状态存 SQLite。DST 原生文件从结构化状态生成到 managed root。
 
-The managed root layout will use stable subdirectories:
+managed root 使用稳定子目录：
 
-- `steamcmd/`: SteamCMD installation.
-- `dst/`: DST dedicated server installation.
-- `clusters/`: generated cluster directories, worlds, saves, tokens, and shard configs.
-- `logs/`: controller logs and task logs.
-- `state/`: SQLite database and local controller metadata.
+- `steamcmd/`：SteamCMD 安装目录。
+- `dst/`：DST 专用服务器安装目录。
+- `clusters/`：生成的 cluster、世界、存档、token、shard 配置。
+- `logs/`：控制器日志和任务日志。
+- `state/`：SQLite 数据库和本地控制器元数据。
 
-## DST File Policy
+## DST 文件策略
 
-The controller owns generated files for managed servers:
+控制器拥有受管服务器的生成文件：
 
 - `cluster.ini`
 - `Master/server.ini`
@@ -37,17 +37,16 @@ The controller owns generated files for managed servers:
 - `Master/modoverrides.lua`
 - `Caves/modoverrides.lua`
 - `cluster_token.txt`
-- allow/block/admin list files
+- allow/block/admin 列表文件
 
-Writers for DST files live in adapter code. Handlers and UI code must not hand-roll these formats.
+DST 文件 writer 放在 adapter 层。handler 和 UI 不能手写这些格式。
 
-## Process Policy
+## 进程策略
 
-The controller directly launches and supervises Master and Caves processes for the single managed server instance. It is responsible for stop/start/restart, status detection, update safety, and log streaming.
+控制器直接启动并监督单个受管服务器实例的 Master 和 Caves 进程，负责启动、停止、重启、状态检测、更新安全和日志流。
 
-The first release does not generate systemd units. A later installer may optionally wrap the controller itself in systemd, but DST child process management remains inside the controller.
+首版不生成 systemd unit。后续 installer 可以选择让 systemd 托管控制器自身，但 shard 生命周期仍由控制器内部管理。
 
-## Security
+## 安全
 
-The default listener is `127.0.0.1`. The controller generates an admin token on first run and requires it for mutating API requests. Secrets are masked in logs and ordinary API responses.
-
+默认监听 `127.0.0.1`。控制器首次运行生成 admin token，并要求修改类 API 携带该 token。日志和普通 API 响应中必须隐藏敏感信息。

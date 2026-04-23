@@ -1,47 +1,40 @@
-# Agent Instructions
+# Agent 指令
 
-Read this file before changing code.
+保持本文件精简。项目状态、架构细节和任务进度放在 `docs/`。
 
-## Required Context
+## 开始前
 
-Before implementation work, read:
+编码前先读：
 
 - `docs/ARCHITECTURE.md`
 - `docs/TASKS.md`
 - `docs/DECISIONS.md`
 
-If the change affects deployment, DST files, process management, or configuration generation, also update the relevant docs.
+从 `docs/TASKS.md` 选择一个任务处理。若用户要求的任务不在列表里，先更新任务列表，除非用户明确说不要。
 
-Before coding, identify the single task being handled from `docs/TASKS.md`. If the requested work is not listed there, add or adjust the task entry first unless the user explicitly asks not to.
+## 规则
 
-## Architecture Rules
+- 保持后端分层：`domain`、`service`、`adapter`、`http`。
+- DST 文件格式生成逻辑不能写在 handler 或 UI 里。
+- 外部命令只能通过共享 command runner 执行，使用参数数组；禁止拼接 shell 用户输入。
+- token、服务器密码、admin 凭据都视为敏感信息。
+- 行为变更要增加或更新测试。
+- 核心架构不支持 Docker。
+- 不导入、不迁移、不修改用户已有的手动 DST 部署。
+- 受管 DST 安装、世界、存档、模组缓存必须位于控制器 managed root 下。
+- Web 默认监听 `127.0.0.1`。
+- 如果用户是在提问、讨论 issue、排查问题或征求方案，先定位和分析，不要直接改代码；只有用户明确要求“开始修改/实现/修复”时才动手改。
 
-- Preserve the backend layering: `domain` defines concepts, `service` orchestrates use cases, `adapter` talks to the OS/DST/SQLite, and `http` exposes APIs.
-- Do not put DST file-format generation in HTTP handlers or UI code.
-- Do not let frontend code encode DST config file formats directly; use API schemas.
-- Execute external commands only through the shared command runner.
-- Pass command arguments as arrays. Never shell-concatenate user input.
-- Treat tokens, server passwords, and admin credentials as secrets. Do not log or echo them in normal API responses.
-- Add or update tests for behavior changes.
-- If a design decision changes, update `docs/DECISIONS.md`.
-- If a module boundary changes, update `docs/ARCHITECTURE.md`.
+## 收尾
 
-## Product Constraints
+结束前：
 
-- No Docker support in the core architecture.
-- Do not import or mutate a user's existing manual DST installation unless a future explicit migration feature is designed.
-- The managed DST install, worlds, saves, and mod cache must live under the controller's managed root.
-- The default web listener must bind to `127.0.0.1`.
+- 跑相关检查：后端用 `go test ./...`，前端在 `web/` 下跑 `npm run check` 和 `npm run build`。
+- 对改过的 Go 文件运行 `gofmt`。
+- 更新 `docs/TASKS.md`，记录完成内容、下一任务和阻塞点。
+- 若模块边界或重大决策变化，更新 `docs/ARCHITECTURE.md` 或 `docs/DECISIONS.md`。
+- 未经用户明确要求，不要提交 commit。
+- 可以在完成一个聚焦修改、检查通过、工作区状态清楚时，建议用户是否提交，并给出建议提交信息。
+- 最终回复说明：跑了哪些检查、跳过了哪些检查、工作区是否干净。
 
-## Required Closeout
-
-Before finishing an implementation turn:
-
-- Run the relevant checks. Use `go test ./...` for backend changes and `npm run check` plus `npm run build` in `web/` for frontend changes.
-- Run `gofmt` on touched Go files.
-- Update `docs/TASKS.md` with completed work, current state, next task, and any newly discovered blockers.
-- Update `docs/ARCHITECTURE.md` or `docs/DECISIONS.md` if module boundaries, data ownership, deployment behavior, or major technical choices changed.
-- Commit the completed work with a focused message, unless the user explicitly asks not to commit.
-- In the final response, report the commit hash, checks run, checks that could not run, and whether the working tree is clean.
-
-Do not mark a task complete if tests/checks were skipped without documenting why.
+如果测试或检查被跳过，必须写明原因；否则不要把任务标记为完成。
