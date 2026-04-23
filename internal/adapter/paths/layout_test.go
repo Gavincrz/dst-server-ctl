@@ -1,6 +1,7 @@
 package paths
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -33,5 +34,31 @@ func TestManagedLayoutUsesStableSubdirectories(t *testing.T) {
 	}
 	if layout.State != "/srv/example/state" {
 		t.Fatalf("State path = %q", layout.State)
+	}
+}
+
+func TestEnsureManagedLayoutCreatesStableSubdirectories(t *testing.T) {
+	root := t.TempDir()
+	layout := ManagedLayout(filepath.Join(root, "managed"))
+
+	if err := EnsureManagedLayout(layout); err != nil {
+		t.Fatalf("EnsureManagedLayout() error = %v", err)
+	}
+
+	for _, dir := range []string{
+		layout.Root,
+		layout.SteamCMD,
+		layout.DST,
+		layout.Clusters,
+		layout.Logs,
+		layout.State,
+	} {
+		info, err := os.Stat(dir)
+		if err != nil {
+			t.Fatalf("Stat(%q) error = %v", dir, err)
+		}
+		if !info.IsDir() {
+			t.Fatalf("%q is not a directory", dir)
+		}
 	}
 }

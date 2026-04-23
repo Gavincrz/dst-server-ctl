@@ -32,3 +32,22 @@ func ManagedLayout(root string) domain.ManagedLayout {
 		State:    filepath.Join(root, "state"),
 	}
 }
+
+func EnsureManagedLayout(layout domain.ManagedLayout) error {
+	dirs := []string{
+		layout.Root,
+		layout.SteamCMD,
+		layout.DST,
+		layout.Clusters,
+		layout.Logs,
+		layout.State,
+	}
+
+	for _, dir := range dirs {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
