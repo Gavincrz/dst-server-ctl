@@ -16,4 +16,3 @@ func (s *StatusService) Status() domain.Status {
 		Status:  domain.ServerStatusUnknown,
 	}
 }
-

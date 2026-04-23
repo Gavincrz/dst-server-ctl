@@ -35,4 +35,3 @@ func respondJSON(w http.ResponseWriter, payload any) {
 		http.Error(w, "failed to encode response", http.StatusInternalServerError)
 	}
 }
-

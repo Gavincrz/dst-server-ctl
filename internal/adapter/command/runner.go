@@ -41,4 +41,3 @@ func (ExecRunner) Run(ctx context.Context, name string, args ...string) (Result,
 
 	return Result{Stdout: string(stdout)}, err
 }
-

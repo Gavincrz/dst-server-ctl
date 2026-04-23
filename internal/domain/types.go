@@ -31,4 +31,3 @@ type Status struct {
 	Status    ServerStatus `json:"status"`
 	StartedAt *time.Time   `json:"startedAt,omitempty"`
 }
-

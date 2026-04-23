@@ -32,4 +32,3 @@ func ManagedLayout(root string) domain.ManagedLayout {
 		State:    filepath.Join(root, "state"),
 	}
 }
-

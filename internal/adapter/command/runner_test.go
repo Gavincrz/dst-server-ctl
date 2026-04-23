@@ -23,4 +23,3 @@ func TestExecRunnerPassesArgumentsWithoutShellExpansion(t *testing.T) {
 		t.Fatalf("stdout = %q", result.Stdout)
 	}
 }
-

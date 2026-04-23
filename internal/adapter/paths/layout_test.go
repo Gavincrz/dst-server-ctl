@@ -35,4 +35,3 @@ func TestManagedLayoutUsesStableSubdirectories(t *testing.T) {
 		t.Fatalf("State path = %q", layout.State)
 	}
 }
-
