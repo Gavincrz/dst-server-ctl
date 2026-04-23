@@ -1,6 +1,11 @@
 package domain
 
-import "time"
+import (
+	"errors"
+	"time"
+)
+
+var ErrInstallationStateNotFound = errors.New("installation state not found")
 
 type ShardName string
 
@@ -30,4 +35,12 @@ type Status struct {
 	Version   string       `json:"version"`
 	Status    ServerStatus `json:"status"`
 	StartedAt *time.Time   `json:"startedAt,omitempty"`
+}
+
+type InstallationState struct {
+	ManagedRoot         string
+	SteamCMDInstalledAt *time.Time
+	DSTInstalledAt      *time.Time
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
 }
