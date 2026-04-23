@@ -12,6 +12,12 @@ Key operational facts:
 - Server mods are downloaded through `dedicated_server_mods_setup.lua` entries such as `ServerModSetup("workshop_id")`.
 - Enabled mods and mod configuration live in `modoverrides.lua`.
 
+Local reference observed on this development VPS:
+
+- Master process: `./dontstarve_dedicated_server_nullrenderer -persistent_storage_root /home/dontstarve/dst-server/dontstarve-config -conf_dir server_dir -cluster lhy_server -console -shard Master`
+- Caves process: `./dontstarve_dedicated_server_nullrenderer -persistent_storage_root /home/dontstarve/dst-server/dontstarve-config -conf_dir server_dir -cluster lhy_server -console -shard Caves`
+- This manual deployment is reference-only. The project must not import, mutate, or assume ownership of `/home/dontstarve/dst-server`.
+
 Useful references:
 
 - Klei Linux dedicated server guide: https://forums.kleientertainment.com/forums/topic/64441-dedicated-server-quick-setup-guide-linux/
@@ -35,4 +41,3 @@ References:
 
 - OpenAI harness engineering: https://openai.com/index/harness-engineering/
 - OpenAI Codex guide: https://openai.com/business/guides-and-resources/how-openai-uses-codex/
-
