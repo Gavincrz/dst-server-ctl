@@ -1,0 +1,19 @@
+{
+  "name": "dst-server-ctl-web",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "check": "svelte-check --tsconfig ./tsconfig.json"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^7.0.0",
+    "@tsconfig/svelte": "^5.0.4",
+    "svelte": "^5.55.4",
+    "svelte-check": "^4.4.6",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.10"
+  }
+}

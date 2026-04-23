@@ -1,0 +1,22 @@
+.DS_Store
+*.log
+*.tmp
+
+# Go
+bin/
+dist/
+coverage.out
+
+# Frontend
+node_modules/
+web/dist/
+web/.svelte-kit/
+
+# Local runtime state
+.env
+.env.*
+data/
+*.db
+*.db-shm
+*.db-wal
+
