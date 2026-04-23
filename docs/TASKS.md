@@ -10,16 +10,17 @@
 - [x] 配置本机 Go 工具链，并验证后端测试。
 - [x] 添加 SQLite migration 层和安装状态仓储接口。
 - [x] 定义安装状态 API 和 managed root 初始化流程。
+- [x] 实现 SteamCMD 安装计划和任务模型。
 
-当前项目已有 harness、工程骨架、managed root 路径布局、共享 command runner、SQLite 状态存储基础层，以及启动时 managed root 初始化和安装状态 API。还没有实现 SteamCMD/DST 安装能力。
+当前项目已有 harness、工程骨架、managed root 路径布局、共享 command runner、SQLite 状态存储基础层、启动时 managed root 初始化、安装状态 API、任务模型，以及 DST SteamCMD 安装命令计划。还没有实现完整安装执行流程和前端状态页。
 
 ## 下一任务
 
-- [ ] 实现 SteamCMD 安装计划和任务模型。
+- [ ] 添加第一个 Svelte 状态页，并接入后端 `/api/v1/status` 和 `/api/v1/installation`。
 
 ## 后续任务
 
-- [ ] 添加第一个 Svelte 状态页，并接入后端 `/api/v1/status`。
+- [ ] 添加安装任务 API，并把任务模型接入 SteamCMD 安装执行流程。
 
 ## 暂时不要做
 

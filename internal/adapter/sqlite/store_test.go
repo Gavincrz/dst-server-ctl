@@ -74,6 +74,72 @@ func TestGetInstallationStateReturnsNotFound(t *testing.T) {
 	}
 }
 
+func TestTaskRepositoryCreatesListsGetsAndUpdatesTasks(t *testing.T) {
+	ctx := context.Background()
+	store := openTestStore(t, ctx)
+	defer store.Close()
+
+	createdAt := time.Date(2026, 4, 23, 9, 0, 0, 0, time.UTC)
+	task := domain.Task{
+		ID:        "task-1",
+		Type:      domain.TaskTypeInstallDST,
+		Status:    domain.TaskStatusPending,
+		Detail:    "Install DST",
+		CreatedAt: createdAt,
+		UpdatedAt: createdAt,
+	}
+
+	if err := store.CreateTask(ctx, task); err != nil {
+		t.Fatalf("CreateTask() error = %v", err)
+	}
+
+	got, err := store.GetTask(ctx, task.ID)
+	if err != nil {
+		t.Fatalf("GetTask() error = %v", err)
+	}
+	if got.ID != task.ID {
+		t.Fatalf("ID = %q, want %q", got.ID, task.ID)
+	}
+	if got.Status != domain.TaskStatusPending {
+		t.Fatalf("Status = %q, want pending", got.Status)
+	}
+
+	startedAt := createdAt.Add(time.Minute)
+	finishedAt := createdAt.Add(2 * time.Minute)
+	got.Status = domain.TaskStatusSucceeded
+	got.StartedAt = &startedAt
+	got.FinishedAt = &finishedAt
+	got.UpdatedAt = finishedAt
+	if err := store.UpdateTask(ctx, got); err != nil {
+		t.Fatalf("UpdateTask() error = %v", err)
+	}
+
+	tasks, err := store.ListTasks(ctx)
+	if err != nil {
+		t.Fatalf("ListTasks() error = %v", err)
+	}
+	if len(tasks) != 1 {
+		t.Fatalf("task count = %d, want 1", len(tasks))
+	}
+	if tasks[0].Status != domain.TaskStatusSucceeded {
+		t.Fatalf("Status = %q, want succeeded", tasks[0].Status)
+	}
+	if tasks[0].StartedAt == nil || !tasks[0].StartedAt.Equal(startedAt) {
+		t.Fatalf("StartedAt = %v, want %v", tasks[0].StartedAt, startedAt)
+	}
+}
+
+func TestGetTaskReturnsNotFound(t *testing.T) {
+	ctx := context.Background()
+	store := openTestStore(t, ctx)
+	defer store.Close()
+
+	_, err := store.GetTask(ctx, "missing")
+	if !errors.Is(err, domain.ErrTaskNotFound) {
+		t.Fatalf("GetTask() error = %v, want ErrTaskNotFound", err)
+	}
+}
+
 func openTestStore(t *testing.T, ctx context.Context) *Store {
 	t.Helper()
 

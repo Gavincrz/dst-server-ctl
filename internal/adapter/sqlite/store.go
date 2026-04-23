@@ -97,6 +97,120 @@ ON CONFLICT(id) DO UPDATE SET
 	return nil
 }
 
+func (s *Store) CreateTask(ctx context.Context, task domain.Task) error {
+	row := taskRowFromDomain(task)
+	_, err := s.db.ExecContext(ctx, `
+INSERT INTO tasks (
+	id,
+	type,
+	status,
+	detail,
+	error,
+	started_at,
+	finished_at,
+	created_at,
+	updated_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		row.ID,
+		row.Type,
+		row.Status,
+		row.Detail,
+		row.Error,
+		row.StartedAt,
+		row.FinishedAt,
+		row.CreatedAt,
+		row.UpdatedAt,
+	)
+	if err != nil {
+		return fmt.Errorf("create task: %w", err)
+	}
+
+	return nil
+}
+
+func (s *Store) GetTask(ctx context.Context, id domain.TaskID) (domain.Task, error) {
+	row, err := s.getTaskRow(ctx, `SELECT id, type, status, detail, error, started_at, finished_at, created_at, updated_at FROM tasks WHERE id = ?`, string(id))
+	if errors.Is(err, sql.ErrNoRows) {
+		return domain.Task{}, domain.ErrTaskNotFound
+	}
+	if err != nil {
+		return domain.Task{}, err
+	}
+
+	return row.toDomain()
+}
+
+func (s *Store) ListTasks(ctx context.Context) ([]domain.Task, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id, type, status, detail, error, started_at, finished_at, created_at, updated_at FROM tasks ORDER BY created_at DESC, id DESC`)
+	if err != nil {
+		return nil, fmt.Errorf("list tasks: %w", err)
+	}
+	defer rows.Close()
+
+	var tasks []domain.Task
+	for rows.Next() {
+		row, err := scanTaskRow(rows)
+		if err != nil {
+			return nil, err
+		}
+		task, err := row.toDomain()
+		if err != nil {
+			return nil, err
+		}
+		tasks = append(tasks, task)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate tasks: %w", err)
+	}
+
+	return tasks, nil
+}
+
+func (s *Store) UpdateTask(ctx context.Context, task domain.Task) error {
+	row := taskRowFromDomain(task)
+	result, err := s.db.ExecContext(ctx, `
+UPDATE tasks SET
+	type = ?,
+	status = ?,
+	detail = ?,
+	error = ?,
+	started_at = ?,
+	finished_at = ?,
+	updated_at = ?
+WHERE id = ?`,
+		row.Type,
+		row.Status,
+		row.Detail,
+		row.Error,
+		row.StartedAt,
+		row.FinishedAt,
+		row.UpdatedAt,
+		row.ID,
+	)
+	if err != nil {
+		return fmt.Errorf("update task: %w", err)
+	}
+
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("check updated task count: %w", err)
+	}
+	if affected == 0 {
+		return domain.ErrTaskNotFound
+	}
+
+	return nil
+}
+
+func (s *Store) getTaskRow(ctx context.Context, query string, args ...any) (taskRow, error) {
+	row := s.db.QueryRowContext(ctx, query, args...)
+	task, err := scanTaskRow(row)
+	if err != nil {
+		return taskRow{}, err
+	}
+	return task, nil
+}
+
 type installationStateRow struct {
 	ManagedRoot         string
 	SteamCMDInstalledAt sql.NullString
@@ -174,4 +288,83 @@ func parseRequiredTime(name string, value string) (time.Time, error) {
 	}
 
 	return parsed, nil
+}
+
+type taskRow struct {
+	ID         string
+	Type       string
+	Status     string
+	Detail     string
+	Error      string
+	StartedAt  sql.NullString
+	FinishedAt sql.NullString
+	CreatedAt  string
+	UpdatedAt  string
+}
+
+type rowScanner interface {
+	Scan(dest ...any) error
+}
+
+func scanTaskRow(scanner rowScanner) (taskRow, error) {
+	var row taskRow
+	if err := scanner.Scan(
+		&row.ID,
+		&row.Type,
+		&row.Status,
+		&row.Detail,
+		&row.Error,
+		&row.StartedAt,
+		&row.FinishedAt,
+		&row.CreatedAt,
+		&row.UpdatedAt,
+	); err != nil {
+		return taskRow{}, err
+	}
+	return row, nil
+}
+
+func taskRowFromDomain(task domain.Task) taskRow {
+	return taskRow{
+		ID:         string(task.ID),
+		Type:       string(task.Type),
+		Status:     string(task.Status),
+		Detail:     task.Detail,
+		Error:      task.Error,
+		StartedAt:  nullableTime(task.StartedAt),
+		FinishedAt: nullableTime(task.FinishedAt),
+		CreatedAt:  task.CreatedAt.UTC().Format(timeFormat),
+		UpdatedAt:  task.UpdatedAt.UTC().Format(timeFormat),
+	}
+}
+
+func (r taskRow) toDomain() (domain.Task, error) {
+	startedAt, err := parseNullableTime("started_at", r.StartedAt)
+	if err != nil {
+		return domain.Task{}, err
+	}
+	finishedAt, err := parseNullableTime("finished_at", r.FinishedAt)
+	if err != nil {
+		return domain.Task{}, err
+	}
+	createdAt, err := parseRequiredTime("created_at", r.CreatedAt)
+	if err != nil {
+		return domain.Task{}, err
+	}
+	updatedAt, err := parseRequiredTime("updated_at", r.UpdatedAt)
+	if err != nil {
+		return domain.Task{}, err
+	}
+
+	return domain.Task{
+		ID:         domain.TaskID(r.ID),
+		Type:       domain.TaskType(r.Type),
+		Status:     domain.TaskStatus(r.Status),
+		Detail:     r.Detail,
+		Error:      r.Error,
+		StartedAt:  startedAt,
+		FinishedAt: finishedAt,
+		CreatedAt:  createdAt,
+		UpdatedAt:  updatedAt,
+	}, nil
 }

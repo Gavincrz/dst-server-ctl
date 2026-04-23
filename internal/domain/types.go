@@ -6,6 +6,7 @@ import (
 )
 
 var ErrInstallationStateNotFound = errors.New("installation state not found")
+var ErrTaskNotFound = errors.New("task not found")
 
 type ShardName string
 
@@ -43,4 +44,43 @@ type InstallationState struct {
 	DSTInstalledAt      *time.Time
 	CreatedAt           time.Time
 	UpdatedAt           time.Time
+}
+
+type TaskID string
+
+type TaskType string
+
+const (
+	TaskTypeInstallSteamCMD TaskType = "install_steamcmd"
+	TaskTypeInstallDST      TaskType = "install_dst"
+)
+
+type TaskStatus string
+
+const (
+	TaskStatusPending   TaskStatus = "pending"
+	TaskStatusRunning   TaskStatus = "running"
+	TaskStatusSucceeded TaskStatus = "succeeded"
+	TaskStatusFailed    TaskStatus = "failed"
+)
+
+type Task struct {
+	ID         TaskID
+	Type       TaskType
+	Status     TaskStatus
+	Detail     string
+	Error      string
+	StartedAt  *time.Time
+	FinishedAt *time.Time
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+}
+
+type InstallPlan struct {
+	Steps []InstallStep
+}
+
+type InstallStep struct {
+	Type        TaskType
+	Description string
 }

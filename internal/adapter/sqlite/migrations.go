@@ -27,6 +27,24 @@ CREATE TABLE installation_state (
 	updated_at TEXT NOT NULL
 );`,
 	},
+	{
+		Version: 2,
+		Name:    "create_tasks",
+		SQL: `
+CREATE TABLE tasks (
+	id TEXT PRIMARY KEY,
+	type TEXT NOT NULL,
+	status TEXT NOT NULL,
+	detail TEXT NOT NULL,
+	error TEXT NOT NULL,
+	started_at TEXT,
+	finished_at TEXT,
+	created_at TEXT NOT NULL,
+	updated_at TEXT NOT NULL
+);
+
+CREATE INDEX tasks_created_at_idx ON tasks(created_at);`,
+	},
 }
 
 func Migrate(ctx context.Context, db *sql.DB) error {
