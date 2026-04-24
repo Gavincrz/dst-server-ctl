@@ -8,10 +8,13 @@ import (
 )
 
 func TestInstallDSTPlanUsesSteamCMDArgumentArray(t *testing.T) {
-	plan := InstallDSTPlan(domain.ManagedLayout{DST: "/srv/dst with spaces"})
+	plan := InstallDSTPlan(domain.ManagedLayout{
+		SteamCMD: "/srv/managed/steamcmd",
+		DST:      "/srv/dst with spaces",
+	})
 
-	if plan.Name != "steamcmd" {
-		t.Fatalf("Name = %q, want steamcmd", plan.Name)
+	if plan.Name != "/srv/managed/steamcmd/steamcmd.sh" {
+		t.Fatalf("Name = %q, want /srv/managed/steamcmd/steamcmd.sh", plan.Name)
 	}
 
 	wantArgs := []string{

@@ -12,16 +12,17 @@
 - [x] 定义安装状态 API 和 managed root 初始化流程。
 - [x] 实现 SteamCMD 安装计划和任务模型。
 - [x] 添加第一个 Svelte 状态页，并接入后端 `/api/v1/status` 和 `/api/v1/installation`。
+- [x] 添加安装任务 API，并把任务模型接入 SteamCMD 安装执行流程。
 
-当前项目已有 harness、工程骨架、managed root 路径布局、共享 command runner、SQLite 状态存储基础层、启动时 managed root 初始化、安装状态 API、任务模型、DST SteamCMD 安装命令计划，以及第一个 Svelte 状态页。还没有实现完整安装执行流程。
+当前项目已有 harness、工程骨架、managed root 路径布局、共享 command runner、SQLite 状态存储基础层、启动时 managed root 初始化、安装状态 API、安装任务 API、任务模型，以及由任务驱动的 SteamCMD/DST 安装执行流程。前端还没有显示安装任务列表，也没有安装操作入口。
 
 ## 下一任务
 
-- [ ] 添加安装任务 API，并把任务模型接入 SteamCMD 安装执行流程。
+- [ ] 在 Svelte 状态页显示安装任务列表和安装操作入口。
 
 ## 后续任务
 
-- [ ] 在 Svelte 状态页显示安装任务列表和安装操作入口。
+- [ ] 为安装任务状态增加前端轮询和错误展示细节。
 
 ## 暂时不要做
 

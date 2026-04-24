@@ -28,6 +28,7 @@ func TestInstallationStatusEndpoint(t *testing.T) {
 				UpdatedAt:           createdAt,
 			},
 		},
+		InstallTasks: fakeInstallationTaskService{},
 	})
 
 	request := httptest.NewRequest(nethttp.MethodGet, "/api/v1/installation", nil)
@@ -58,6 +59,7 @@ func TestInstallationStatusEndpointReturnsNotFound(t *testing.T) {
 	router := NewRouter(testLogger(), Services{
 		Status:       fakeStatusReader{},
 		Installation: fakeInstallationStatusReader{err: domain.ErrInstallationStateNotFound},
+		InstallTasks: fakeInstallationTaskService{},
 	})
 
 	request := httptest.NewRequest(nethttp.MethodGet, "/api/v1/installation", nil)
@@ -76,6 +78,7 @@ func TestInstallationStatusEndpointReturnsInternalServerError(t *testing.T) {
 	router := NewRouter(testLogger(), Services{
 		Status:       fakeStatusReader{},
 		Installation: fakeInstallationStatusReader{err: errors.New("database unavailable")},
+		InstallTasks: fakeInstallationTaskService{},
 	})
 
 	request := httptest.NewRequest(nethttp.MethodGet, "/api/v1/installation", nil)
@@ -84,6 +87,89 @@ func TestInstallationStatusEndpointReturnsInternalServerError(t *testing.T) {
 
 	if response.Code != nethttp.StatusInternalServerError {
 		t.Fatalf("status = %d, want %d", response.Code, nethttp.StatusInternalServerError)
+	}
+}
+
+func TestListInstallTasksEndpoint(t *testing.T) {
+	createdAt := time.Date(2026, 4, 24, 9, 0, 0, 0, time.UTC)
+	router := NewRouter(testLogger(), Services{
+		Status:       fakeStatusReader{},
+		Installation: fakeInstallationStatusReader{},
+		InstallTasks: fakeInstallationTaskService{
+			tasks: []domain.Task{
+				{
+					ID:        "task-1",
+					Type:      domain.TaskTypeInstallDST,
+					Status:    domain.TaskStatusRunning,
+					Detail:    "Install DST",
+					CreatedAt: createdAt,
+					UpdatedAt: createdAt,
+				},
+			},
+		},
+	})
+
+	request := httptest.NewRequest(nethttp.MethodGet, "/api/v1/install/tasks", nil)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	if response.Code != nethttp.StatusOK {
+		t.Fatalf("status = %d, want %d", response.Code, nethttp.StatusOK)
+	}
+
+	var payload []taskResponse
+	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode response error = %v", err)
+	}
+	if len(payload) != 1 {
+		t.Fatalf("task count = %d, want 1", len(payload))
+	}
+	if payload[0].ID != "task-1" {
+		t.Fatalf("first ID = %q, want task-1", payload[0].ID)
+	}
+}
+
+func TestStartInstallTasksEndpoint(t *testing.T) {
+	createdAt := time.Date(2026, 4, 24, 10, 0, 0, 0, time.UTC)
+	router := NewRouter(testLogger(), Services{
+		Status:       fakeStatusReader{},
+		Installation: fakeInstallationStatusReader{},
+		InstallTasks: fakeInstallationTaskService{
+			startedTasks: []domain.Task{
+				{
+					ID:        "task-1",
+					Type:      domain.TaskTypeInstallSteamCMD,
+					Status:    domain.TaskStatusPending,
+					Detail:    "Install SteamCMD",
+					CreatedAt: createdAt,
+					UpdatedAt: createdAt,
+				},
+			},
+		},
+	})
+
+	request := httptest.NewRequest(nethttp.MethodPost, "/api/v1/install/tasks", nil)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	if response.Code != nethttp.StatusAccepted {
+		t.Fatalf("status = %d, want %d", response.Code, nethttp.StatusAccepted)
+	}
+}
+
+func TestStartInstallTasksEndpointReturnsConflict(t *testing.T) {
+	router := NewRouter(testLogger(), Services{
+		Status:       fakeStatusReader{},
+		Installation: fakeInstallationStatusReader{},
+		InstallTasks: fakeInstallationTaskService{startErr: domain.ErrInstallAlreadyInProgress},
+	})
+
+	request := httptest.NewRequest(nethttp.MethodPost, "/api/v1/install/tasks", nil)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	if response.Code != nethttp.StatusConflict {
+		t.Fatalf("status = %d, want %d", response.Code, nethttp.StatusConflict)
 	}
 }
 
@@ -103,6 +189,27 @@ func (r fakeInstallationStatusReader) Status(context.Context) (domain.Installati
 		return domain.InstallationState{}, r.err
 	}
 	return r.state, nil
+}
+
+type fakeInstallationTaskService struct {
+	tasks        []domain.Task
+	listErr      error
+	startedTasks []domain.Task
+	startErr     error
+}
+
+func (s fakeInstallationTaskService) ListTasks(context.Context) ([]domain.Task, error) {
+	if s.listErr != nil {
+		return nil, s.listErr
+	}
+	return s.tasks, nil
+}
+
+func (s fakeInstallationTaskService) Start(context.Context) ([]domain.Task, error) {
+	if s.startErr != nil {
+		return nil, s.startErr
+	}
+	return s.startedTasks, nil
 }
 
 func testLogger() *slog.Logger {

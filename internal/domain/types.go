@@ -7,6 +7,8 @@ import (
 
 var ErrInstallationStateNotFound = errors.New("installation state not found")
 var ErrTaskNotFound = errors.New("task not found")
+var ErrInstallAlreadyInProgress = errors.New("install already in progress")
+var ErrInstallNotRequired = errors.New("install not required")
 
 type ShardName string
 

@@ -10,8 +10,11 @@ import (
 	"syscall"
 	"time"
 
+	"dst-server-ctl/internal/adapter/command"
 	"dst-server-ctl/internal/adapter/paths"
 	"dst-server-ctl/internal/adapter/sqlite"
+	"dst-server-ctl/internal/adapter/steamcmd"
+	"dst-server-ctl/internal/adapter/taskid"
 	apphttp "dst-server-ctl/internal/http"
 	"dst-server-ctl/internal/service"
 )
@@ -40,10 +43,23 @@ func main() {
 		logger.Error("installation state initialization failed", "root", layout.Root, "error", err)
 		os.Exit(1)
 	}
+	taskService := service.NewInstallTaskService(store, taskid.Generator{})
+	installRunnerService := service.NewInstallRunnerService(
+		layout,
+		store,
+		store,
+		service.NewInstallPlanner(),
+		taskService,
+		steamcmd.NewClient(command.ExecRunner{}),
+	)
 
 	server := &http.Server{
-		Addr:              "127.0.0.1:8737",
-		Handler:           apphttp.NewRouter(logger, apphttp.Services{Status: statusService, Installation: installationService}),
+		Addr: "127.0.0.1:8737",
+		Handler: apphttp.NewRouter(logger, apphttp.Services{
+			Status:       statusService,
+			Installation: installationService,
+			InstallTasks: installRunnerService,
+		}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
