@@ -62,6 +62,7 @@ main {
 
 h1,
 h2,
+h3,
 p,
 dl {
   margin: 0;
@@ -75,6 +76,11 @@ h1 {
 h2 {
   font-size: 1rem;
   line-height: 1.25;
+}
+
+h3 {
+  font-size: 1.35rem;
+  line-height: 1.2;
 }
 
 code {
@@ -274,17 +280,69 @@ dd {
   min-width: 9.5rem;
 }
 
-.task-summary {
-  display: flex;
-  align-items: center;
+.init-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(220px, 0.6fr);
+  gap: 0.85rem;
+  padding-top: 1rem;
+}
+
+.init-hero-copy,
+.init-status,
+.checkpoint {
+  border: 1px solid #edf0f3;
+  border-radius: 8px;
+  background: #fbfcfd;
+}
+
+.init-hero-copy {
+  display: grid;
+  gap: 0.6rem;
+  padding: 1rem;
+}
+
+.init-kicker {
+  color: #65707d;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.init-hero-copy p,
+.init-status small {
+  color: #65707d;
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.init-status {
+  display: grid;
+  align-content: start;
+  gap: 0.75rem;
+  padding: 1rem;
+}
+
+.checkpoint-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.75rem;
   padding-top: 1rem;
 }
 
-.task-summary-text {
+.checkpoint {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.9rem;
+}
+
+.checkpoint span {
   color: #65707d;
   font-size: 0.9rem;
-  line-height: 1.45;
+}
+
+.checkpoint.complete {
+  border-color: #cfe4d1;
+  background: #f6fbf7;
 }
 
 .empty-state {
@@ -389,6 +447,11 @@ dd {
   background: #f6d9d3;
 }
 
+.badge-idle {
+  color: #2f4b4f;
+  background: #dceced;
+}
+
 @media (max-width: 760px) {
   main {
     padding: 1rem;
@@ -415,7 +478,8 @@ dd {
     width: 100%;
   }
 
-  .task-summary,
+  .init-hero,
+  .checkpoint-list,
   .task-head,
   .task-meta {
     display: grid;

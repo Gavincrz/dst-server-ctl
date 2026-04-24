@@ -61,6 +61,14 @@
     return tasks.some((task) => task.status === 'pending' || task.status === 'running');
   }
 
+  function latestTask(tasks: InstallationTask[]) {
+    return tasks[0] ?? null;
+  }
+
+  function activeTask(tasks: InstallationTask[]) {
+    return tasks.find((task) => task.status === 'running') ?? tasks.find((task) => task.status === 'pending') ?? null;
+  }
+
   async function refresh(options: { background?: boolean } = {}) {
     const background = options.background ?? false;
 
@@ -140,16 +148,96 @@
   function taskTypeLabel(type: string) {
     switch (type) {
       case 'install_steamcmd':
-        return 'Install SteamCMD';
+        return 'SteamCMD';
       case 'install_dst':
-        return 'Install DST';
+        return 'DST Dedicated Server';
       default:
         return type;
     }
   }
 
   function taskStatusLabel(status: string) {
-    return status.split('_').join(' ');
+    switch (status) {
+      case 'pending':
+        return 'Waiting';
+      case 'running':
+        return 'Installing';
+      case 'succeeded':
+        return 'Done';
+      case 'failed':
+        return 'Failed';
+      case 'idle':
+        return 'Idle';
+      default:
+        return status.split('_').join(' ');
+    }
+  }
+
+  function initializationHeading(status: InstallationStatus | null, tasks: InstallationTask[]) {
+    if (!status) {
+      return 'Loading initialization state';
+    }
+    if (status.steamcmdInstalled && status.dstInstalled) {
+      return 'Managed server is ready';
+    }
+
+    const currentTask = activeTask(tasks);
+    if (currentTask?.status === 'running') {
+      return `Installing ${taskTypeLabel(currentTask.type)}`;
+    }
+    if (currentTask?.status === 'pending') {
+      return `Waiting to start ${taskTypeLabel(currentTask.type)}`;
+    }
+
+    const recentTask = latestTask(tasks);
+    if (recentTask?.status === 'failed') {
+      return 'Installation needs attention';
+    }
+
+    return 'Managed server is not installed yet';
+  }
+
+  function initializationMessage(status: InstallationStatus | null, tasks: InstallationTask[]) {
+    if (!status) {
+      return 'Loading installation details from the controller.';
+    }
+    if (status.steamcmdInstalled && status.dstInstalled) {
+      return 'SteamCMD and the DST dedicated server are installed inside the managed root.';
+    }
+
+    const currentTask = activeTask(tasks);
+    if (currentTask?.status === 'running') {
+      return `${taskTypeLabel(currentTask.type)} is currently running. Progress refreshes automatically every 3 seconds.`;
+    }
+    if (currentTask?.status === 'pending') {
+      return `${taskTypeLabel(currentTask.type)} is waiting for the current install step to finish.`;
+    }
+
+    const recentTask = latestTask(tasks);
+    if (recentTask?.status === 'failed') {
+      return recentTask.error || 'The last install attempt failed. Review the error and retry when ready.';
+    }
+
+    return 'Start installation to prepare SteamCMD and the DST dedicated server in the managed root.';
+  }
+
+  function installActionLabel(status: InstallationStatus | null, tasks: InstallationTask[]) {
+    if (installSubmitting) {
+      return 'Starting Install';
+    }
+    if (!status) {
+      return 'Start Install';
+    }
+    if (status.steamcmdInstalled && status.dstInstalled) {
+      return 'Install Complete';
+    }
+
+    const recentTask = latestTask(tasks);
+    if (recentTask?.status === 'failed') {
+      return 'Retry Install';
+    }
+
+    return 'Start Install';
   }
 
   async function startInstall() {
@@ -173,7 +261,7 @@
       }
 
       installTasks = (await response.json()) as InstallationTask[];
-      actionMessage = 'Install tasks created. Progress will refresh automatically.';
+      actionMessage = 'Installation started. Progress will refresh automatically.';
       await refresh({ background: true });
     } catch (err) {
       installError = err instanceof Error ? err.message : 'Install request failed';
@@ -214,7 +302,7 @@
 
   {#if actionMessage}
     <section class="notice notice-success" aria-live="polite">
-      <span>Install Tasks</span>
+      <span>Installation</span>
       <strong>{actionMessage}</strong>
     </section>
   {/if}
@@ -240,9 +328,9 @@
       <small>version {controller?.version ?? '-'}</small>
     </div>
     <div class="metric">
-      <span>Installation</span>
+      <span>Initialization</span>
       <strong>{overallInstallState(installation)}</strong>
-      <small>managed instance</small>
+      <small>{hasActiveInstallTasks(installTasks) ? 'install in progress' : 'managed instance'}</small>
     </div>
     <div class="metric">
       <span>Last Refresh</span>
@@ -299,11 +387,11 @@
       </div>
     </section>
 
-    <section class="panel panel-wide" aria-label="Installation tasks">
+    <section class="panel panel-wide" aria-label="Initialization">
       <div class="panel-heading">
         <div>
-          <h2>Installation Tasks</h2>
-          <p class="subtle">Create managed install tasks and inspect recent execution state.</p>
+          <h2>Initialization</h2>
+          <p class="subtle">Use the controller to install and verify the managed DST server instance.</p>
         </div>
         <button
           type="button"
@@ -311,29 +399,46 @@
           disabled={!canStartInstall(installation, installTasks) || installSubmitting}
           on:click={startInstall}
         >
-          {installSubmitting ? 'Starting Install' : 'Start Install'}
+          {installActionLabel(installation, installTasks)}
         </button>
       </div>
 
-      <div class="task-summary">
-        <span class="badge">{installTasks.length} task{installTasks.length === 1 ? '' : 's'}</span>
-        {#if installation && installation.steamcmdInstalled && installation.dstInstalled}
-          <span class="task-summary-text">Managed installation is already ready.</span>
-        {:else if hasActiveInstallTasks(installTasks)}
-          <span class="task-summary-text">
-            An installation run is already queued or in progress. Status refreshes every 3 seconds.
+      <div class="init-hero">
+        <div class="init-hero-copy">
+          <span class="init-kicker">Managed setup</span>
+          <h3>{initializationHeading(installation, installTasks)}</h3>
+          <p>{initializationMessage(installation, installTasks)}</p>
+        </div>
+        <div class="init-status">
+          <span class={`badge badge-${latestTask(installTasks)?.status ?? 'idle'}`}>
+            {installation && installation.steamcmdInstalled && installation.dstInstalled
+              ? 'Ready'
+              : taskStatusLabel(activeTask(installTasks)?.status ?? latestTask(installTasks)?.status ?? 'idle')}
           </span>
-        {:else}
-          <span class="task-summary-text">No active install run. Use the button to create a new run.</span>
-        {/if}
+          <small>
+            {#if hasActiveInstallTasks(installTasks)}
+              Automatic refresh is enabled while installation is active.
+            {:else if installation && installation.steamcmdInstalled && installation.dstInstalled}
+              The controller can move on to configuration and runtime features.
+            {:else}
+              Installation starts only when you trigger it from this page.
+            {/if}
+          </small>
+        </div>
       </div>
 
-      {#if installTasks.length === 0}
-        <div class="empty-state">
-          <strong>No installation tasks yet</strong>
-          <p>Start an install run to create SteamCMD and DST tasks in the managed root.</p>
-        </div>
-      {:else}
+      <div class="checkpoint-list">
+        <article class:complete={installation?.steamcmdInstalled} class="checkpoint">
+          <strong>SteamCMD</strong>
+          <span>{installation ? boolLabel(installation.steamcmdInstalled) : 'Loading'}</span>
+        </article>
+        <article class:complete={installation?.dstInstalled} class="checkpoint">
+          <strong>DST Dedicated Server</strong>
+          <span>{installation ? boolLabel(installation.dstInstalled) : 'Loading'}</span>
+        </article>
+      </div>
+
+      {#if installTasks.length > 0}
         <div class="task-list">
           {#each installTasks as task}
             <article class={`task task-${task.status}`}>
@@ -367,6 +472,11 @@
               {/if}
             </article>
           {/each}
+        </div>
+      {:else}
+        <div class="empty-state">
+          <strong>No installation attempts yet</strong>
+          <p>The controller is ready to create the managed SteamCMD and DST installation when you start it.</p>
         </div>
       {/if}
     </section>
