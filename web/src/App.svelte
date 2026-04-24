@@ -325,7 +325,11 @@
     <div class="metric">
       <span>Controller</span>
       <strong>{controller?.status ?? 'Loading'}</strong>
-      <small>version {controller?.version ?? '-'}</small>
+      <small>
+        version {controller?.version ?? '-'}{#if controller?.startedAt}
+          {' '}· started {formatDate(controller.startedAt)}
+        {/if}
+      </small>
     </div>
     <div class="metric">
       <span>Initialization</span>
