@@ -111,3 +111,7 @@ func (r *fakeRunner) Run(_ context.Context, name string, args ...string) (comman
 	r.errs = r.errs[1:]
 	return command.Result{}, err
 }
+
+func (r *fakeRunner) Start(context.Context, string, ...string) (command.Process, error) {
+	return nil, nil
+}

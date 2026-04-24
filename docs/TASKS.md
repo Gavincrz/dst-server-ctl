@@ -18,16 +18,17 @@
 - [x] 定义受管 cluster 的基础结构化配置状态和读写 API。
 - [x] 为 cluster 配置生成基础 `cluster.ini` 和 shard `server.ini` 输出。
 - [x] 把 cluster 配置 API 接入 Web UI 表单和保存流程。
+- [x] 为受管 DST 启动流程接入生成后的 cluster 配置目录和 shard 布局。
 
-当前项目已有 harness、工程骨架、managed root 路径布局、共享 command runner、SQLite 状态存储基础层、启动时 managed root 初始化、安装状态 API、安装任务 API、任务模型、由任务驱动的 SteamCMD/DST 安装执行流程、初始化状态页、可反映控制器启动时间的基础运行状态、受管 cluster 的结构化配置状态和 `GET/PUT /api/v1/cluster` 读写 API、由该状态生成的基础 `cluster.ini` 与 shard `server.ini` 文件输出，以及接入 Web UI 的 cluster 配置表单、保存、重置和前端测试。
+当前项目已有 harness、工程骨架、managed root 路径布局、共享 command runner、SQLite 状态存储基础层、启动时 managed root 初始化、安装状态 API、安装任务 API、任务模型、由任务驱动的 SteamCMD/DST 安装执行流程、初始化状态页、可反映控制器启动时间的基础运行状态、受管 cluster 的结构化配置状态和 `GET/PUT /api/v1/cluster` 读写 API、由该状态生成的基础 `cluster.ini` 与 shard `server.ini` 文件输出、接入 Web UI 的 cluster 配置表单/保存/重置和前端测试，以及基于 managed root `clusters/primary` 布局的 DST shard 启动命令生成与运行时启动 service。
 
 ## 下一任务
 
-- [ ] 为受管 DST 启动流程接入生成后的 cluster 配置目录和 shard 布局。
+- [ ] 在启动流程接通后补充运行态状态页和基础进程控制入口。
 
 ## 后续任务
 
-- [ ] 在启动流程接通后补充运行态状态页和基础进程控制入口。
+- [ ] 为 Master 和 Caves 补充日志流读取与展示。
 
 ## 暂时不要做
 
@@ -48,3 +49,4 @@
 
 - 第一版公开发布时，`leveldataoverride.lua` 要做到多完整的可视化。
 - 启动流程接入后，cluster 配置变更与运行中 shard 的重载策略要不要区分“需重启”与“即时生效”。
+- 当前 runtime service 只打通了启动命令与 shard 布局，进程退出状态持久化、停止/重启和日志管线仍待后续任务接上。

@@ -11,6 +11,8 @@ var ErrInvalidClusterConfig = errors.New("invalid cluster config")
 var ErrTaskNotFound = errors.New("task not found")
 var ErrInstallAlreadyInProgress = errors.New("install already in progress")
 var ErrInstallNotRequired = errors.New("install not required")
+var ErrDSTNotInstalled = errors.New("dst not installed")
+var ErrServerAlreadyRunning = errors.New("server already running")
 
 type ShardName string
 
