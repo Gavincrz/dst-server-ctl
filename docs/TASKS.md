@@ -15,16 +15,18 @@
 - [x] 添加安装任务 API，并把任务模型接入 SteamCMD 安装执行流程。
 - [x] 在 Svelte 状态页显示安装任务列表和安装操作入口。
 - [x] 为安装任务状态增加前端轮询和错误展示细节。
+- [x] 定义受管 cluster 的基础结构化配置状态和读写 API。
+- [x] 为 cluster 配置生成基础 `cluster.ini` 和 shard `server.ini` 输出。
 
-当前项目已有 harness、工程骨架、managed root 路径布局、共享 command runner、SQLite 状态存储基础层、启动时 managed root 初始化、安装状态 API、安装任务 API、任务模型、由任务驱动的 SteamCMD/DST 安装执行流程、初始化状态页，以及可反映控制器启动时间的基础运行状态。
+当前项目已有 harness、工程骨架、managed root 路径布局、共享 command runner、SQLite 状态存储基础层、启动时 managed root 初始化、安装状态 API、安装任务 API、任务模型、由任务驱动的 SteamCMD/DST 安装执行流程、初始化状态页、可反映控制器启动时间的基础运行状态、受管 cluster 的结构化配置状态和 `GET/PUT /api/v1/cluster` 读写 API，以及由该状态生成的基础 `cluster.ini` 与 shard `server.ini` 文件输出。
 
 ## 下一任务
 
-- [ ] 定义受管 cluster 的基础结构化配置状态和读写 API。
+- [ ] 把 cluster 配置 API 接入 Web UI 表单和保存流程。
 
 ## 后续任务
 
-- [ ] 为 cluster 配置生成基础 `cluster.ini` 和 shard `server.ini` 输出。
+- [ ] 为受管 DST 启动流程接入生成后的 cluster 配置目录和 shard 布局。
 
 ## 暂时不要做
 
@@ -39,7 +41,7 @@
 - [x] 本次改过的 Go 文件已格式化。
 - [x] 若边界或技术决策变化，已更新架构或决策文档。
 - [x] 本文件已反映完成内容和下一任务。
-- [x] 未经用户明确要求，没有提交 commit。
+- [x] 已按用户要求提交 commit。
 
 ## 未决问题
 

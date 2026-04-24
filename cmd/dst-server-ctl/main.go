@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"dst-server-ctl/internal/adapter/command"
+	"dst-server-ctl/internal/adapter/dstconfig"
 	"dst-server-ctl/internal/adapter/paths"
 	"dst-server-ctl/internal/adapter/sqlite"
 	"dst-server-ctl/internal/adapter/steamcmd"
@@ -43,6 +44,11 @@ func main() {
 		logger.Error("installation state initialization failed", "root", layout.Root, "error", err)
 		os.Exit(1)
 	}
+	clusterService := service.NewClusterConfigService(store, dstconfig.NewWriter(layout))
+	if _, err := clusterService.Initialize(ctx); err != nil {
+		logger.Error("cluster config initialization failed", "root", layout.Root, "error", err)
+		os.Exit(1)
+	}
 	taskService := service.NewInstallTaskService(store, taskid.Generator{})
 	installRunnerService := service.NewInstallRunnerService(
 		layout,
@@ -58,6 +64,7 @@ func main() {
 		Handler: apphttp.NewRouter(logger, apphttp.Services{
 			Status:       statusService,
 			Installation: installationService,
+			Cluster:      clusterService,
 			InstallTasks: installRunnerService,
 		}),
 		ReadHeaderTimeout: 5 * time.Second,

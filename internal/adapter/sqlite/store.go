@@ -97,6 +97,109 @@ ON CONFLICT(id) DO UPDATE SET
 	return nil
 }
 
+func (s *Store) GetClusterConfig(ctx context.Context) (domain.ClusterConfig, error) {
+	var row clusterConfigRow
+	err := s.db.QueryRowContext(ctx, `
+SELECT cluster_name, cluster_description, game_mode, max_players, language, pvp, pause_when_empty, created_at, updated_at
+FROM cluster_config
+WHERE id = 1`).Scan(
+		&row.ClusterName,
+		&row.ClusterDescription,
+		&row.GameMode,
+		&row.MaxPlayers,
+		&row.Language,
+		&row.PVP,
+		&row.PauseWhenEmpty,
+		&row.CreatedAt,
+		&row.UpdatedAt,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return domain.ClusterConfig{}, domain.ErrClusterConfigNotFound
+	}
+	if err != nil {
+		return domain.ClusterConfig{}, fmt.Errorf("get cluster config: %w", err)
+	}
+
+	shards, err := s.listClusterShards(ctx)
+	if err != nil {
+		return domain.ClusterConfig{}, err
+	}
+	row.Shards = shards
+
+	config, err := row.toDomain()
+	if err != nil {
+		return domain.ClusterConfig{}, err
+	}
+
+	return config, nil
+}
+
+func (s *Store) SaveClusterConfig(ctx context.Context, config domain.ClusterConfig) error {
+	row := clusterConfigRowFromDomain(config)
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin save cluster config: %w", err)
+	}
+	defer tx.Rollback()
+
+	_, err = tx.ExecContext(ctx, `
+INSERT INTO cluster_config (
+	id,
+	cluster_name,
+	cluster_description,
+	game_mode,
+	max_players,
+	language,
+	pvp,
+	pause_when_empty,
+	created_at,
+	updated_at
+) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(id) DO UPDATE SET
+	cluster_name = excluded.cluster_name,
+	cluster_description = excluded.cluster_description,
+	game_mode = excluded.game_mode,
+	max_players = excluded.max_players,
+	language = excluded.language,
+	pvp = excluded.pvp,
+	pause_when_empty = excluded.pause_when_empty,
+	updated_at = excluded.updated_at`,
+		row.ClusterName,
+		row.ClusterDescription,
+		row.GameMode,
+		row.MaxPlayers,
+		row.Language,
+		row.PVP,
+		row.PauseWhenEmpty,
+		row.CreatedAt,
+		row.UpdatedAt,
+	)
+	if err != nil {
+		return fmt.Errorf("save cluster config: %w", err)
+	}
+
+	if _, err := tx.ExecContext(ctx, `DELETE FROM cluster_shards`); err != nil {
+		return fmt.Errorf("clear cluster shards: %w", err)
+	}
+	for _, shard := range row.Shards {
+		if _, err := tx.ExecContext(ctx, `
+INSERT INTO cluster_shards (name, enabled)
+VALUES (?, ?)`,
+			shard.Name,
+			shard.Enabled,
+		); err != nil {
+			return fmt.Errorf("save cluster shard %s: %w", shard.Name, err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit cluster config: %w", err)
+	}
+
+	return nil
+}
+
 func (s *Store) CreateTask(ctx context.Context, task domain.Task) error {
 	row := taskRowFromDomain(task)
 	_, err := s.db.ExecContext(ctx, `
@@ -255,6 +358,101 @@ func (r installationStateRow) toDomain() (domain.InstallationState, error) {
 		CreatedAt:           createdAt,
 		UpdatedAt:           updatedAt,
 	}, nil
+}
+
+type clusterConfigRow struct {
+	ClusterName        string
+	ClusterDescription string
+	GameMode           string
+	MaxPlayers         int
+	Language           string
+	PVP                bool
+	PauseWhenEmpty     bool
+	Shards             []clusterShardRow
+	CreatedAt          string
+	UpdatedAt          string
+}
+
+type clusterShardRow struct {
+	Name    string
+	Enabled bool
+}
+
+func clusterConfigRowFromDomain(config domain.ClusterConfig) clusterConfigRow {
+	shards := make([]clusterShardRow, 0, len(config.Shards))
+	for _, shard := range config.Shards {
+		shards = append(shards, clusterShardRow{
+			Name:    string(shard.Name),
+			Enabled: shard.Enabled,
+		})
+	}
+
+	return clusterConfigRow{
+		ClusterName:        config.ClusterName,
+		ClusterDescription: config.ClusterDescription,
+		GameMode:           config.GameMode,
+		MaxPlayers:         config.MaxPlayers,
+		Language:           config.Language,
+		PVP:                config.PVP,
+		PauseWhenEmpty:     config.PauseWhenEmpty,
+		Shards:             shards,
+		CreatedAt:          config.CreatedAt.UTC().Format(timeFormat),
+		UpdatedAt:          config.UpdatedAt.UTC().Format(timeFormat),
+	}
+}
+
+func (r clusterConfigRow) toDomain() (domain.ClusterConfig, error) {
+	createdAt, err := parseRequiredTime("created_at", r.CreatedAt)
+	if err != nil {
+		return domain.ClusterConfig{}, err
+	}
+	updatedAt, err := parseRequiredTime("updated_at", r.UpdatedAt)
+	if err != nil {
+		return domain.ClusterConfig{}, err
+	}
+
+	shards := make([]domain.ShardConfig, 0, len(r.Shards))
+	for _, shard := range r.Shards {
+		shards = append(shards, domain.ShardConfig{
+			Name:    domain.ShardName(shard.Name),
+			Enabled: shard.Enabled,
+		})
+	}
+
+	return domain.ClusterConfig{
+		ClusterName:        r.ClusterName,
+		ClusterDescription: r.ClusterDescription,
+		GameMode:           r.GameMode,
+		MaxPlayers:         r.MaxPlayers,
+		Language:           r.Language,
+		PVP:                r.PVP,
+		PauseWhenEmpty:     r.PauseWhenEmpty,
+		Shards:             shards,
+		CreatedAt:          createdAt,
+		UpdatedAt:          updatedAt,
+	}, nil
+}
+
+func (s *Store) listClusterShards(ctx context.Context) ([]clusterShardRow, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT name, enabled FROM cluster_shards ORDER BY CASE name WHEN 'Master' THEN 0 WHEN 'Caves' THEN 1 ELSE 2 END, name`)
+	if err != nil {
+		return nil, fmt.Errorf("list cluster shards: %w", err)
+	}
+	defer rows.Close()
+
+	var shards []clusterShardRow
+	for rows.Next() {
+		var shard clusterShardRow
+		if err := rows.Scan(&shard.Name, &shard.Enabled); err != nil {
+			return nil, fmt.Errorf("scan cluster shard: %w", err)
+		}
+		shards = append(shards, shard)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate cluster shards: %w", err)
+	}
+
+	return shards, nil
 }
 
 func nullableTime(value *time.Time) sql.NullString {

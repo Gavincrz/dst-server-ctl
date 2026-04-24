@@ -74,6 +74,61 @@ func TestGetInstallationStateReturnsNotFound(t *testing.T) {
 	}
 }
 
+func TestClusterConfigRepositoryRoundTripsConfig(t *testing.T) {
+	ctx := context.Background()
+	store := openTestStore(t, ctx)
+	defer store.Close()
+
+	config := domain.ClusterConfig{
+		ClusterName:        "Managed DST",
+		ClusterDescription: "Test cluster",
+		GameMode:           "survival",
+		MaxPlayers:         8,
+		Language:           "en",
+		PVP:                true,
+		PauseWhenEmpty:     false,
+		Shards: []domain.ShardConfig{
+			{Name: domain.ShardMaster, Enabled: true},
+			{Name: domain.ShardCaves, Enabled: false},
+		},
+		CreatedAt: time.Date(2026, 4, 24, 9, 0, 0, 0, time.UTC),
+		UpdatedAt: time.Date(2026, 4, 24, 10, 0, 0, 0, time.UTC),
+	}
+
+	if err := store.SaveClusterConfig(ctx, config); err != nil {
+		t.Fatalf("SaveClusterConfig() error = %v", err)
+	}
+
+	got, err := store.GetClusterConfig(ctx)
+	if err != nil {
+		t.Fatalf("GetClusterConfig() error = %v", err)
+	}
+
+	if got.ClusterName != config.ClusterName {
+		t.Fatalf("ClusterName = %q, want %q", got.ClusterName, config.ClusterName)
+	}
+	if got.GameMode != config.GameMode {
+		t.Fatalf("GameMode = %q, want %q", got.GameMode, config.GameMode)
+	}
+	if len(got.Shards) != 2 {
+		t.Fatalf("shard count = %d, want 2", len(got.Shards))
+	}
+	if got.Shards[1].Name != domain.ShardCaves || got.Shards[1].Enabled {
+		t.Fatalf("Caves shard = %#v, want disabled caves shard", got.Shards[1])
+	}
+}
+
+func TestGetClusterConfigReturnsNotFound(t *testing.T) {
+	ctx := context.Background()
+	store := openTestStore(t, ctx)
+	defer store.Close()
+
+	_, err := store.GetClusterConfig(ctx)
+	if !errors.Is(err, domain.ErrClusterConfigNotFound) {
+		t.Fatalf("GetClusterConfig() error = %v, want ErrClusterConfigNotFound", err)
+	}
+}
+
 func TestTaskRepositoryCreatesListsGetsAndUpdatesTasks(t *testing.T) {
 	ctx := context.Background()
 	store := openTestStore(t, ctx)

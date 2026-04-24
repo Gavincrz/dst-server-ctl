@@ -45,6 +45,28 @@ CREATE TABLE tasks (
 
 CREATE INDEX tasks_created_at_idx ON tasks(created_at);`,
 	},
+	{
+		Version: 3,
+		Name:    "create_cluster_config",
+		SQL: `
+CREATE TABLE cluster_config (
+	id INTEGER PRIMARY KEY CHECK (id = 1),
+	cluster_name TEXT NOT NULL,
+	cluster_description TEXT NOT NULL,
+	game_mode TEXT NOT NULL,
+	max_players INTEGER NOT NULL,
+	language TEXT NOT NULL,
+	pvp INTEGER NOT NULL,
+	pause_when_empty INTEGER NOT NULL,
+	created_at TEXT NOT NULL,
+	updated_at TEXT NOT NULL
+);
+
+CREATE TABLE cluster_shards (
+	name TEXT PRIMARY KEY,
+	enabled INTEGER NOT NULL
+);`,
+	},
 }
 
 func Migrate(ctx context.Context, db *sql.DB) error {

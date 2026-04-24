@@ -62,3 +62,17 @@ func TestEnsureManagedLayoutCreatesStableSubdirectories(t *testing.T) {
 		}
 	}
 }
+
+func TestManagedClusterPathsUseStableManagedDirectory(t *testing.T) {
+	layout := ManagedLayout("/srv/example")
+
+	if got := ManagedClusterDir(layout); got != "/srv/example/clusters/primary" {
+		t.Fatalf("ManagedClusterDir() = %q, want %q", got, "/srv/example/clusters/primary")
+	}
+	if got := ManagedShardDir(layout, "Master"); got != "/srv/example/clusters/primary/Master" {
+		t.Fatalf("ManagedShardDir(Master) = %q, want %q", got, "/srv/example/clusters/primary/Master")
+	}
+	if got := ManagedShardDir(layout, "Caves"); got != "/srv/example/clusters/primary/Caves" {
+		t.Fatalf("ManagedShardDir(Caves) = %q, want %q", got, "/srv/example/clusters/primary/Caves")
+	}
+}

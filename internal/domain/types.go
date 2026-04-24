@@ -6,6 +6,8 @@ import (
 )
 
 var ErrInstallationStateNotFound = errors.New("installation state not found")
+var ErrClusterConfigNotFound = errors.New("cluster config not found")
+var ErrInvalidClusterConfig = errors.New("invalid cluster config")
 var ErrTaskNotFound = errors.New("task not found")
 var ErrInstallAlreadyInProgress = errors.New("install already in progress")
 var ErrInstallNotRequired = errors.New("install not required")
@@ -46,6 +48,24 @@ type InstallationState struct {
 	DSTInstalledAt      *time.Time
 	CreatedAt           time.Time
 	UpdatedAt           time.Time
+}
+
+type ClusterConfig struct {
+	ClusterName        string
+	ClusterDescription string
+	GameMode           string
+	MaxPlayers         int
+	Language           string
+	PVP                bool
+	PauseWhenEmpty     bool
+	Shards             []ShardConfig
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
+}
+
+type ShardConfig struct {
+	Name    ShardName
+	Enabled bool
 }
 
 type TaskID string

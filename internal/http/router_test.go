@@ -28,6 +28,7 @@ func TestInstallationStatusEndpoint(t *testing.T) {
 				UpdatedAt:           createdAt,
 			},
 		},
+		Cluster:      fakeClusterConfigService{},
 		InstallTasks: fakeInstallationTaskService{},
 	})
 
@@ -59,6 +60,7 @@ func TestInstallationStatusEndpointReturnsNotFound(t *testing.T) {
 	router := NewRouter(testLogger(), Services{
 		Status:       fakeStatusReader{},
 		Installation: fakeInstallationStatusReader{err: domain.ErrInstallationStateNotFound},
+		Cluster:      fakeClusterConfigService{},
 		InstallTasks: fakeInstallationTaskService{},
 	})
 
@@ -78,6 +80,7 @@ func TestInstallationStatusEndpointReturnsInternalServerError(t *testing.T) {
 	router := NewRouter(testLogger(), Services{
 		Status:       fakeStatusReader{},
 		Installation: fakeInstallationStatusReader{err: errors.New("database unavailable")},
+		Cluster:      fakeClusterConfigService{},
 		InstallTasks: fakeInstallationTaskService{},
 	})
 
@@ -95,6 +98,7 @@ func TestListInstallTasksEndpoint(t *testing.T) {
 	router := NewRouter(testLogger(), Services{
 		Status:       fakeStatusReader{},
 		Installation: fakeInstallationStatusReader{},
+		Cluster:      fakeClusterConfigService{},
 		InstallTasks: fakeInstallationTaskService{
 			tasks: []domain.Task{
 				{
@@ -134,6 +138,7 @@ func TestStartInstallTasksEndpoint(t *testing.T) {
 	router := NewRouter(testLogger(), Services{
 		Status:       fakeStatusReader{},
 		Installation: fakeInstallationStatusReader{},
+		Cluster:      fakeClusterConfigService{},
 		InstallTasks: fakeInstallationTaskService{
 			startedTasks: []domain.Task{
 				{
@@ -161,6 +166,7 @@ func TestStartInstallTasksEndpointReturnsConflict(t *testing.T) {
 	router := NewRouter(testLogger(), Services{
 		Status:       fakeStatusReader{},
 		Installation: fakeInstallationStatusReader{},
+		Cluster:      fakeClusterConfigService{},
 		InstallTasks: fakeInstallationTaskService{startErr: domain.ErrInstallAlreadyInProgress},
 	})
 
@@ -170,6 +176,121 @@ func TestStartInstallTasksEndpointReturnsConflict(t *testing.T) {
 
 	if response.Code != nethttp.StatusConflict {
 		t.Fatalf("status = %d, want %d", response.Code, nethttp.StatusConflict)
+	}
+}
+
+func TestGetClusterConfigEndpoint(t *testing.T) {
+	createdAt := time.Date(2026, 4, 24, 11, 0, 0, 0, time.UTC)
+	router := NewRouter(testLogger(), Services{
+		Status:       fakeStatusReader{},
+		Installation: fakeInstallationStatusReader{},
+		Cluster: fakeClusterConfigService{
+			config: domain.ClusterConfig{
+				ClusterName:        "Managed DST",
+				ClusterDescription: "test",
+				GameMode:           "survival",
+				MaxPlayers:         8,
+				Language:           "en",
+				PauseWhenEmpty:     true,
+				Shards: []domain.ShardConfig{
+					{Name: domain.ShardMaster, Enabled: true},
+					{Name: domain.ShardCaves, Enabled: false},
+				},
+				CreatedAt: createdAt,
+				UpdatedAt: createdAt,
+			},
+		},
+		InstallTasks: fakeInstallationTaskService{},
+	})
+
+	request := httptest.NewRequest(nethttp.MethodGet, "/api/v1/cluster", nil)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	if response.Code != nethttp.StatusOK {
+		t.Fatalf("status = %d, want %d", response.Code, nethttp.StatusOK)
+	}
+
+	var payload clusterResponse
+	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode response error = %v", err)
+	}
+	if payload.ClusterName != "Managed DST" {
+		t.Fatalf("ClusterName = %q, want Managed DST", payload.ClusterName)
+	}
+	if len(payload.Shards) != 2 {
+		t.Fatalf("shard count = %d, want 2", len(payload.Shards))
+	}
+}
+
+func TestUpdateClusterConfigEndpoint(t *testing.T) {
+	updatedAt := time.Date(2026, 4, 24, 12, 0, 0, 0, time.UTC)
+	router := NewRouter(testLogger(), Services{
+		Status:       fakeStatusReader{},
+		Installation: fakeInstallationStatusReader{},
+		Cluster: fakeClusterConfigService{
+			updated: domain.ClusterConfig{
+				ClusterName:        "Managed DST",
+				ClusterDescription: "test",
+				GameMode:           "endless",
+				MaxPlayers:         10,
+				Language:           "en",
+				PVP:                true,
+				PauseWhenEmpty:     false,
+				Shards: []domain.ShardConfig{
+					{Name: domain.ShardMaster, Enabled: true},
+					{Name: domain.ShardCaves, Enabled: true},
+				},
+				CreatedAt: updatedAt.Add(-time.Hour),
+				UpdatedAt: updatedAt,
+			},
+		},
+		InstallTasks: fakeInstallationTaskService{},
+	})
+
+	body := strings.NewReader(`{"clusterName":"Managed DST","clusterDescription":"test","gameMode":"endless","maxPlayers":10,"language":"en","pvp":true,"pauseWhenEmpty":false,"shards":[{"name":"Master","enabled":true},{"name":"Caves","enabled":true}]}`)
+	request := httptest.NewRequest(nethttp.MethodPut, "/api/v1/cluster", body)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	if response.Code != nethttp.StatusOK {
+		t.Fatalf("status = %d, want %d", response.Code, nethttp.StatusOK)
+	}
+}
+
+func TestUpdateClusterConfigEndpointReturnsBadRequest(t *testing.T) {
+	router := NewRouter(testLogger(), Services{
+		Status:       fakeStatusReader{},
+		Installation: fakeInstallationStatusReader{},
+		Cluster:      fakeClusterConfigService{updateErr: errors.Join(domain.ErrInvalidClusterConfig, errors.New("cluster name is required"))},
+		InstallTasks: fakeInstallationTaskService{},
+	})
+
+	body := strings.NewReader(`{"clusterName":"","gameMode":"survival","maxPlayers":6,"language":"en","shards":[{"name":"Master","enabled":true}]}`)
+	request := httptest.NewRequest(nethttp.MethodPut, "/api/v1/cluster", body)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	if response.Code != nethttp.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", response.Code, nethttp.StatusBadRequest)
+	}
+}
+
+func TestUpdateClusterConfigEndpointReturnsInternalServerError(t *testing.T) {
+	router := NewRouter(testLogger(), Services{
+		Status:       fakeStatusReader{},
+		Installation: fakeInstallationStatusReader{},
+		Cluster:      fakeClusterConfigService{updateErr: errors.New("database unavailable")},
+		InstallTasks: fakeInstallationTaskService{},
+	})
+
+	body := strings.NewReader(`{"clusterName":"Managed DST","gameMode":"survival","maxPlayers":6,"language":"en","shards":[{"name":"Master","enabled":true}]}`)
+	request := httptest.NewRequest(nethttp.MethodPut, "/api/v1/cluster", body)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	if response.Code != nethttp.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d", response.Code, nethttp.StatusInternalServerError)
 	}
 }
 
@@ -198,6 +319,13 @@ type fakeInstallationTaskService struct {
 	startErr     error
 }
 
+type fakeClusterConfigService struct {
+	config    domain.ClusterConfig
+	getErr    error
+	updated   domain.ClusterConfig
+	updateErr error
+}
+
 func (s fakeInstallationTaskService) ListTasks(context.Context) ([]domain.Task, error) {
 	if s.listErr != nil {
 		return nil, s.listErr
@@ -210,6 +338,20 @@ func (s fakeInstallationTaskService) Start(context.Context) ([]domain.Task, erro
 		return nil, s.startErr
 	}
 	return s.startedTasks, nil
+}
+
+func (s fakeClusterConfigService) Get(context.Context) (domain.ClusterConfig, error) {
+	if s.getErr != nil {
+		return domain.ClusterConfig{}, s.getErr
+	}
+	return s.config, nil
+}
+
+func (s fakeClusterConfigService) Update(_ context.Context, config domain.ClusterConfig) (domain.ClusterConfig, error) {
+	if s.updateErr != nil {
+		return domain.ClusterConfig{}, s.updateErr
+	}
+	return s.updated, nil
 }
 
 func testLogger() *slog.Logger {
