@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
 
+  const installPollIntervalMs = 3000;
+
   type ControllerStatus = {
     version: string;
     status: string;
@@ -15,37 +17,83 @@
     updatedAt: string;
   };
 
+  type InstallationTask = {
+    id: string;
+    type: string;
+    status: string;
+    detail: string;
+    error?: string;
+    startedAt?: string;
+    finishedAt?: string;
+    createdAt: string;
+    updatedAt: string;
+  };
+
   let controller: ControllerStatus | null = null;
   let installation: InstallationStatus | null = null;
+  let installTasks: InstallationTask[] = [];
   let loading = true;
-  let error = '';
+  let polling = false;
+  let installSubmitting = false;
+  let refreshError = '';
+  let installError = '';
+  let actionMessage = '';
   let refreshedAt: Date | null = null;
 
   async function fetchJSON<T>(path: string): Promise<T> {
     const response = await fetch(path);
     if (!response.ok) {
-      throw new Error(`${path} returned HTTP ${response.status}`);
+      let message = `${path} returned HTTP ${response.status}`;
+      try {
+        const payload = (await response.json()) as { error?: string };
+        if (payload.error) {
+          message = payload.error;
+        }
+      } catch {
+        // Ignore JSON parse failures and keep the status-based message.
+      }
+      throw new Error(message);
     }
     return response.json() as Promise<T>;
   }
 
-  async function refresh() {
-    loading = true;
-    error = '';
+  function hasActiveInstallTasks(tasks: InstallationTask[]) {
+    return tasks.some((task) => task.status === 'pending' || task.status === 'running');
+  }
+
+  async function refresh(options: { background?: boolean } = {}) {
+    const background = options.background ?? false;
+
+    if (background) {
+      polling = true;
+    } else {
+      loading = true;
+    }
+    refreshError = '';
 
     try {
-      const [controllerStatus, installationStatus] = await Promise.all([
+      const [controllerStatus, installationStatus, tasks] = await Promise.all([
         fetchJSON<ControllerStatus>('/api/v1/status'),
-        fetchJSON<InstallationStatus>('/api/v1/installation')
+        fetchJSON<InstallationStatus>('/api/v1/installation'),
+        fetchJSON<InstallationTask[]>('/api/v1/install/tasks')
       ]);
       controller = controllerStatus;
       installation = installationStatus;
+      installTasks = tasks;
       refreshedAt = new Date();
     } catch (err) {
-      error = err instanceof Error ? err.message : 'Request failed';
+      refreshError = err instanceof Error ? err.message : 'Request failed';
     } finally {
-      loading = false;
+      if (background) {
+        polling = false;
+      } else {
+        loading = false;
+      }
     }
+  }
+
+  function refreshNow() {
+    void refresh();
   }
 
   function formatDate(value?: string | null) {
@@ -79,8 +127,77 @@
     return 'Not installed';
   }
 
+  function canStartInstall(status: InstallationStatus | null, tasks: InstallationTask[]) {
+    if (!status) {
+      return false;
+    }
+    if (status.steamcmdInstalled && status.dstInstalled) {
+      return false;
+    }
+    return !hasActiveInstallTasks(tasks);
+  }
+
+  function taskTypeLabel(type: string) {
+    switch (type) {
+      case 'install_steamcmd':
+        return 'Install SteamCMD';
+      case 'install_dst':
+        return 'Install DST';
+      default:
+        return type;
+    }
+  }
+
+  function taskStatusLabel(status: string) {
+    return status.split('_').join(' ');
+  }
+
+  async function startInstall() {
+    installSubmitting = true;
+    installError = '';
+    actionMessage = '';
+
+    try {
+      const response = await fetch('/api/v1/install/tasks', { method: 'POST' });
+      if (!response.ok) {
+        let message = `Install request returned HTTP ${response.status}`;
+        try {
+          const payload = (await response.json()) as { error?: string };
+          if (payload.error) {
+            message = payload.error;
+          }
+        } catch {
+          // Ignore JSON parse failures and keep the status-based message.
+        }
+        throw new Error(message);
+      }
+
+      installTasks = (await response.json()) as InstallationTask[];
+      actionMessage = 'Install tasks created. Progress will refresh automatically.';
+      await refresh({ background: true });
+    } catch (err) {
+      installError = err instanceof Error ? err.message : 'Install request failed';
+    } finally {
+      installSubmitting = false;
+    }
+  }
+
   onMount(() => {
-    void refresh();
+    let pollTimer: ReturnType<typeof setInterval> | null = null;
+
+    void refreshNow();
+    pollTimer = setInterval(() => {
+      if (!hasActiveInstallTasks(installTasks) || installSubmitting) {
+        return;
+      }
+      void refresh({ background: true });
+    }, installPollIntervalMs);
+
+    return () => {
+      if (pollTimer) {
+        clearInterval(pollTimer);
+      }
+    };
   });
 </script>
 
@@ -90,15 +207,29 @@
       <p class="eyebrow">dst-server-ctl</p>
       <h1>Server Status</h1>
     </div>
-    <button type="button" class="refresh" disabled={loading} on:click={refresh}>
+    <button type="button" class="refresh" disabled={loading} on:click={refreshNow}>
       {loading ? 'Refreshing' : 'Refresh'}
     </button>
   </header>
 
-  {#if error}
+  {#if actionMessage}
+    <section class="notice notice-success" aria-live="polite">
+      <span>Install Tasks</span>
+      <strong>{actionMessage}</strong>
+    </section>
+  {/if}
+
+  {#if installError}
+    <section class="notice" aria-live="polite">
+      <span>Install Request Failed</span>
+      <strong>{installError}</strong>
+    </section>
+  {/if}
+
+  {#if refreshError}
     <section class="notice" aria-live="polite">
       <span>Backend request failed</span>
-      <strong>{error}</strong>
+      <strong>{refreshError}</strong>
     </section>
   {/if}
 
@@ -116,7 +247,7 @@
     <div class="metric">
       <span>Last Refresh</span>
       <strong>{refreshedAt ? refreshedAt.toLocaleTimeString() : '-'}</strong>
-      <small>{loading ? 'loading' : 'current snapshot'}</small>
+      <small>{loading ? 'loading' : polling ? 'polling install progress' : 'current snapshot'}</small>
     </div>
   </section>
 
@@ -166,6 +297,78 @@
           </div>
         </div>
       </div>
+    </section>
+
+    <section class="panel panel-wide" aria-label="Installation tasks">
+      <div class="panel-heading">
+        <div>
+          <h2>Installation Tasks</h2>
+          <p class="subtle">Create managed install tasks and inspect recent execution state.</p>
+        </div>
+        <button
+          type="button"
+          class="install-action"
+          disabled={!canStartInstall(installation, installTasks) || installSubmitting}
+          on:click={startInstall}
+        >
+          {installSubmitting ? 'Starting Install' : 'Start Install'}
+        </button>
+      </div>
+
+      <div class="task-summary">
+        <span class="badge">{installTasks.length} task{installTasks.length === 1 ? '' : 's'}</span>
+        {#if installation && installation.steamcmdInstalled && installation.dstInstalled}
+          <span class="task-summary-text">Managed installation is already ready.</span>
+        {:else if hasActiveInstallTasks(installTasks)}
+          <span class="task-summary-text">
+            An installation run is already queued or in progress. Status refreshes every 3 seconds.
+          </span>
+        {:else}
+          <span class="task-summary-text">No active install run. Use the button to create a new run.</span>
+        {/if}
+      </div>
+
+      {#if installTasks.length === 0}
+        <div class="empty-state">
+          <strong>No installation tasks yet</strong>
+          <p>Start an install run to create SteamCMD and DST tasks in the managed root.</p>
+        </div>
+      {:else}
+        <div class="task-list">
+          {#each installTasks as task}
+            <article class={`task task-${task.status}`}>
+              <div class="task-head">
+                <div>
+                  <strong>{taskTypeLabel(task.type)}</strong>
+                  <small>{task.detail}</small>
+                </div>
+                <span class={`badge badge-${task.status}`}>{taskStatusLabel(task.status)}</span>
+              </div>
+              <dl class="task-meta">
+                <div>
+                  <dt>ID</dt>
+                  <dd>{task.id}</dd>
+                </div>
+                <div>
+                  <dt>Created</dt>
+                  <dd>{formatDate(task.createdAt)}</dd>
+                </div>
+                <div>
+                  <dt>Started</dt>
+                  <dd>{formatDate(task.startedAt)}</dd>
+                </div>
+                <div>
+                  <dt>Finished</dt>
+                  <dd>{formatDate(task.finishedAt)}</dd>
+                </div>
+              </dl>
+              {#if task.error}
+                <p class="task-error">{task.error}</p>
+              {/if}
+            </article>
+          {/each}
+        </div>
+      {/if}
     </section>
   </section>
 </main>

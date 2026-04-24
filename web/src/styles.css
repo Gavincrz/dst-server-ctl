@@ -77,6 +77,11 @@ h2 {
   line-height: 1.25;
 }
 
+code {
+  font-family:
+    "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+}
+
 .refresh {
   flex: 0 0 auto;
 }
@@ -89,6 +94,16 @@ h2 {
   padding: 0.9rem 1rem;
   background: #fff7ed;
   color: #6d3714;
+}
+
+.notice-success {
+  border-color: #5d9362;
+  background: #eef9f0;
+  color: #214226;
+}
+
+.notice strong {
+  overflow-wrap: anywhere;
 }
 
 .notice span {
@@ -144,6 +159,10 @@ dt {
   gap: 0.75rem;
 }
 
+.panel-wide {
+  grid-column: 1 / -1;
+}
+
 .panel {
   min-width: 0;
   padding: 1rem;
@@ -158,6 +177,11 @@ dt {
   border-bottom: 1px solid #edf0f3;
 }
 
+.panel-heading > div {
+  display: grid;
+  gap: 0.25rem;
+}
+
 .badge {
   flex: 0 0 auto;
   border-radius: 999px;
@@ -166,6 +190,12 @@ dt {
   background: #dceced;
   font-size: 0.78rem;
   font-weight: 800;
+}
+
+.subtle {
+  color: #65707d;
+  font-size: 0.88rem;
+  line-height: 1.4;
 }
 
 .details {
@@ -240,6 +270,125 @@ dd {
   background: #2f7d4f;
 }
 
+.install-action {
+  min-width: 9.5rem;
+}
+
+.task-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding-top: 1rem;
+}
+
+.task-summary-text {
+  color: #65707d;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.empty-state {
+  display: grid;
+  gap: 0.4rem;
+  padding: 1rem 0 0;
+  color: #65707d;
+}
+
+.empty-state strong {
+  color: #20242a;
+}
+
+.task-list {
+  display: grid;
+  gap: 0.85rem;
+  padding-top: 1rem;
+}
+
+.task {
+  display: grid;
+  gap: 0.85rem;
+  border: 1px solid #edf0f3;
+  border-left: 4px solid #aeb7c2;
+  border-radius: 8px;
+  padding: 0.95rem;
+  background: #fbfcfd;
+}
+
+.task-pending {
+  border-left-color: #c08a2c;
+}
+
+.task-running {
+  border-left-color: #2f6f73;
+}
+
+.task-succeeded {
+  border-left-color: #2f7d4f;
+}
+
+.task-failed {
+  border-left-color: #bc4d36;
+}
+
+.task-head {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.task-head > div {
+  display: grid;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.task-head small {
+  color: #65707d;
+}
+
+.task-meta {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.task-meta div {
+  display: grid;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.task-error {
+  border-radius: 6px;
+  padding: 0.75rem 0.85rem;
+  color: #6d3714;
+  background: #fff1e8;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.badge-pending {
+  color: #654200;
+  background: #f7e5bf;
+}
+
+.badge-running {
+  color: #173f43;
+  background: #dceced;
+}
+
+.badge-succeeded {
+  color: #214226;
+  background: #dcefdc;
+}
+
+.badge-failed {
+  color: #5c2016;
+  background: #f6d9d3;
+}
+
 @media (max-width: 760px) {
   main {
     padding: 1rem;
@@ -260,5 +409,16 @@ dd {
 
   .refresh {
     width: 100%;
+  }
+
+  .install-action {
+    width: 100%;
+  }
+
+  .task-summary,
+  .task-head,
+  .task-meta {
+    display: grid;
+    grid-template-columns: 1fr;
   }
 }
