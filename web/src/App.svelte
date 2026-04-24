@@ -1,6 +1,14 @@
 <script lang="ts">
   import { onMount } from 'svelte';
 
+  import {
+    clusterFormFromConfig,
+    clusterFormIsDirty,
+    clusterRequestFromForm,
+    type ClusterConfig,
+    type ClusterFormState
+  } from './lib/clusterForm';
+
   const installPollIntervalMs = 3000;
 
   type ControllerStatus = {
@@ -31,13 +39,18 @@
 
   let controller: ControllerStatus | null = null;
   let installation: InstallationStatus | null = null;
+  let cluster: ClusterConfig | null = null;
+  let clusterForm: ClusterFormState | null = null;
   let installTasks: InstallationTask[] = [];
   let loading = true;
   let polling = false;
   let installSubmitting = false;
+  let clusterSubmitting = false;
   let refreshError = '';
   let installError = '';
+  let clusterError = '';
   let actionMessage = '';
+  let clusterMessage = '';
   let refreshedAt: Date | null = null;
 
   async function fetchJSON<T>(path: string): Promise<T> {
@@ -80,14 +93,21 @@
     refreshError = '';
 
     try {
-      const [controllerStatus, installationStatus, tasks] = await Promise.all([
+      const [controllerStatus, installationStatus, clusterConfig, tasks] = await Promise.all([
         fetchJSON<ControllerStatus>('/api/v1/status'),
         fetchJSON<InstallationStatus>('/api/v1/installation'),
+        fetchJSON<ClusterConfig>('/api/v1/cluster'),
         fetchJSON<InstallationTask[]>('/api/v1/install/tasks')
       ]);
+
+      const previousCluster = cluster;
       controller = controllerStatus;
       installation = installationStatus;
+      cluster = clusterConfig;
       installTasks = tasks;
+      if (!clusterForm || !previousCluster || !clusterFormIsDirty(clusterForm, previousCluster)) {
+        clusterForm = clusterFormFromConfig(clusterConfig);
+      }
       refreshedAt = new Date();
     } catch (err) {
       refreshError = err instanceof Error ? err.message : 'Request failed';
@@ -133,6 +153,20 @@
       return 'Partial';
     }
     return 'Not installed';
+  }
+
+  function clusterShardEnabled(name: 'Master' | 'Caves') {
+    if (!clusterForm) {
+      return false;
+    }
+    return name === 'Master' ? clusterForm.masterEnabled : clusterForm.cavesEnabled;
+  }
+
+  function clusterDirty() {
+    if (!cluster || !clusterForm) {
+      return false;
+    }
+    return clusterFormIsDirty(clusterForm, cluster);
   }
 
   function canStartInstall(status: InstallationStatus | null, tasks: InstallationTask[]) {
@@ -240,6 +274,56 @@
     return 'Start Install';
   }
 
+  function resetClusterForm() {
+    if (!cluster) {
+      return;
+    }
+    clusterForm = clusterFormFromConfig(cluster);
+    clusterError = '';
+    clusterMessage = 'Reverted unsaved cluster changes.';
+  }
+
+  async function saveClusterConfig() {
+    if (!clusterForm) {
+      return;
+    }
+
+    clusterSubmitting = true;
+    clusterError = '';
+    clusterMessage = '';
+
+    try {
+      const response = await fetch('/api/v1/cluster', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(clusterRequestFromForm(clusterForm))
+      });
+      if (!response.ok) {
+        let message = `Cluster update returned HTTP ${response.status}`;
+        try {
+          const payload = (await response.json()) as { error?: string };
+          if (payload.error) {
+            message = payload.error;
+          }
+        } catch {
+          // Ignore JSON parse failures and keep the status-based message.
+        }
+        throw new Error(message);
+      }
+
+      cluster = (await response.json()) as ClusterConfig;
+      clusterForm = clusterFormFromConfig(cluster);
+      clusterMessage = 'Cluster configuration saved and regenerated for the managed root.';
+      refreshedAt = new Date();
+    } catch (err) {
+      clusterError = err instanceof Error ? err.message : 'Cluster update failed';
+    } finally {
+      clusterSubmitting = false;
+    }
+  }
+
   async function startInstall() {
     installSubmitting = true;
     installError = '';
@@ -307,10 +391,24 @@
     </section>
   {/if}
 
+  {#if clusterMessage}
+    <section class="notice notice-success" aria-live="polite">
+      <span>Cluster Configuration</span>
+      <strong>{clusterMessage}</strong>
+    </section>
+  {/if}
+
   {#if installError}
     <section class="notice" aria-live="polite">
       <span>Install Request Failed</span>
       <strong>{installError}</strong>
+    </section>
+  {/if}
+
+  {#if clusterError}
+    <section class="notice" aria-live="polite">
+      <span>Cluster Save Failed</span>
+      <strong>{clusterError}</strong>
     </section>
   {/if}
 
@@ -341,6 +439,139 @@
       <strong>{refreshedAt ? refreshedAt.toLocaleTimeString() : '-'}</strong>
       <small>{loading ? 'loading' : polling ? 'polling install progress' : 'current snapshot'}</small>
     </div>
+  </section>
+
+  <section class="panel panel-wide" aria-label="Cluster configuration">
+    <div class="panel-heading">
+      <div>
+        <h2>Cluster Configuration</h2>
+        <p class="subtle">Edit the managed cluster state. Saving writes the structured config back through the controller API.</p>
+      </div>
+      <div class="panel-actions">
+        <button type="button" class="secondary-action" disabled={!clusterDirty() || clusterSubmitting} on:click={resetClusterForm}>
+          Reset
+        </button>
+        <button type="button" disabled={!clusterDirty() || clusterSubmitting || !clusterForm} on:click={saveClusterConfig}>
+          {clusterSubmitting ? 'Saving' : 'Save Configuration'}
+        </button>
+      </div>
+    </div>
+
+    {#if cluster && clusterForm}
+      <div class="cluster-layout">
+        <form class="cluster-form" on:submit|preventDefault={saveClusterConfig}>
+          <label class="field">
+            <span>Cluster Name</span>
+            <input bind:value={clusterForm.clusterName} disabled={clusterSubmitting} maxlength="64" />
+          </label>
+
+          <label class="field field-wide">
+            <span>Description</span>
+            <textarea bind:value={clusterForm.clusterDescription} disabled={clusterSubmitting} rows="3" maxlength="256"></textarea>
+          </label>
+
+          <label class="field">
+            <span>Game Mode</span>
+            <select bind:value={clusterForm.gameMode} disabled={clusterSubmitting}>
+              <option value="survival">Survival</option>
+              <option value="endless">Endless</option>
+              <option value="wilderness">Wilderness</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Language</span>
+            <select bind:value={clusterForm.language} disabled={clusterSubmitting}>
+              <option value="en">English</option>
+              <option value="zh">Chinese</option>
+              <option value="zhr">Chinese (Traditional)</option>
+              <option value="fr">French</option>
+              <option value="de">German</option>
+              <option value="it">Italian</option>
+              <option value="ja">Japanese</option>
+              <option value="ko">Korean</option>
+              <option value="pl">Polish</option>
+              <option value="pt">Portuguese</option>
+              <option value="ru">Russian</option>
+              <option value="es">Spanish</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Max Players</span>
+            <input bind:value={clusterForm.maxPlayers} disabled={clusterSubmitting} inputmode="numeric" />
+          </label>
+
+          <div class="field field-wide">
+            <span>World Rules</span>
+            <div class="toggle-grid">
+              <label class="toggle-card">
+                <input bind:checked={clusterForm.pauseWhenEmpty} disabled={clusterSubmitting} type="checkbox" />
+                <div>
+                  <strong>Pause When Empty</strong>
+                  <small>Pause the world simulation when no players are online.</small>
+                </div>
+              </label>
+              <label class="toggle-card">
+                <input bind:checked={clusterForm.pvp} disabled={clusterSubmitting} type="checkbox" />
+                <div>
+                  <strong>Enable PVP</strong>
+                  <small>Allow players to damage each other on the managed cluster.</small>
+                </div>
+              </label>
+            </div>
+          </div>
+        </form>
+
+        <aside class="cluster-sidebar">
+          <div class="config-card">
+            <span class="badge">{clusterDirty() ? 'Unsaved Changes' : 'Saved'}</span>
+            <dl class="details">
+              <div>
+                <dt>Created</dt>
+                <dd>{formatDate(cluster.createdAt)}</dd>
+              </div>
+              <div>
+                <dt>Updated</dt>
+                <dd>{formatDate(cluster.updatedAt)}</dd>
+              </div>
+            </dl>
+          </div>
+
+          <div class="config-card">
+            <h3>Shard Layout</h3>
+            <div class="shard-list">
+              <label class="shard-card shard-required">
+                <input bind:checked={clusterForm.masterEnabled} disabled={true} type="checkbox" />
+                <div>
+                  <strong>Master</strong>
+                  <small>Required overworld shard for every managed cluster.</small>
+                </div>
+                <span class={`badge badge-${clusterShardEnabled('Master') ? 'succeeded' : 'failed'}`}>
+                  {clusterShardEnabled('Master') ? 'Enabled' : 'Disabled'}
+                </span>
+              </label>
+
+              <label class="shard-card">
+                <input bind:checked={clusterForm.cavesEnabled} disabled={clusterSubmitting} type="checkbox" />
+                <div>
+                  <strong>Caves</strong>
+                  <small>Toggle the secondary shard while keeping the config structure stable.</small>
+                </div>
+                <span class={`badge badge-${clusterShardEnabled('Caves') ? 'succeeded' : 'idle'}`}>
+                  {clusterShardEnabled('Caves') ? 'Enabled' : 'Disabled'}
+                </span>
+              </label>
+            </div>
+          </div>
+        </aside>
+      </div>
+    {:else}
+      <div class="empty-state">
+        <strong>Loading cluster configuration</strong>
+        <p>The controller is reading the managed cluster state.</p>
+      </div>
+    {/if}
   </section>
 
   <section class="content">
