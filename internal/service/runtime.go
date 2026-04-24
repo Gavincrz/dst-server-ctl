@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sync"
 
 	"dst-server-ctl/internal/adapter/command"
@@ -22,6 +23,7 @@ type RuntimeService struct {
 	mu        sync.Mutex
 	processes map[domain.ShardName]command.Process
 	cancels   map[domain.ShardName]context.CancelFunc
+	lastError string
 }
 
 func NewRuntimeService(
@@ -50,14 +52,17 @@ func (s *RuntimeService) Start(ctx context.Context) error {
 
 	state, err := s.installs.GetInstallationState(ctx)
 	if err != nil {
+		s.lastError = err.Error()
 		return err
 	}
 	if state.DSTInstalledAt == nil {
+		s.lastError = domain.ErrDSTNotInstalled.Error()
 		return domain.ErrDSTNotInstalled
 	}
 
 	config, err := s.clusters.GetClusterConfig(ctx)
 	if err != nil {
+		s.lastError = err.Error()
 		return err
 	}
 
@@ -72,7 +77,9 @@ func (s *RuntimeService) Start(ctx context.Context) error {
 		if err != nil {
 			cancel()
 			s.stopStartedLocked(started)
-			return fmt.Errorf("start shard %s: %w", shard.Name, err)
+			startErr := fmt.Errorf("start shard %s: %w", shard.Name, err)
+			s.lastError = startErr.Error()
+			return startErr
 		}
 
 		s.processes[shard.Name] = process
@@ -80,7 +87,47 @@ func (s *RuntimeService) Start(ctx context.Context) error {
 		started = append(started, shard.Name)
 	}
 
+	s.lastError = ""
 	return nil
+}
+
+func (s *RuntimeService) Stop(context.Context) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if len(s.processes) == 0 {
+		return domain.ErrServerNotRunning
+	}
+
+	s.stopStartedLocked(s.runningShardsLocked())
+	s.lastError = ""
+	return nil
+}
+
+func (s *RuntimeService) Status(context.Context) (domain.RuntimeStatus, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	shards := make([]domain.ShardState, 0, len(s.processes))
+	for _, shard := range s.runningShardsLocked() {
+		process := s.processes[shard]
+		shards = append(shards, domain.ShardState{
+			Name:    shard,
+			Running: true,
+			PID:     process.PID(),
+		})
+	}
+
+	status := domain.ServerStatusStopped
+	if len(shards) > 0 {
+		status = domain.ServerStatusRunning
+	}
+
+	return domain.RuntimeStatus{
+		Status:    status,
+		Shards:    shards,
+		LastError: s.lastError,
+	}, nil
 }
 
 func (s *RuntimeService) stopStartedLocked(shards []domain.ShardName) {
@@ -95,4 +142,13 @@ func (s *RuntimeService) stopStartedLocked(shards []domain.ShardName) {
 			delete(s.processes, shard)
 		}
 	}
+}
+
+func (s *RuntimeService) runningShardsLocked() []domain.ShardName {
+	shards := make([]domain.ShardName, 0, len(s.processes))
+	for shard := range s.processes {
+		shards = append(shards, shard)
+	}
+	slices.SortFunc(shards, compareShardName)
+	return shards
 }

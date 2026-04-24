@@ -129,6 +129,70 @@ func TestRuntimeServiceStartStopsStartedShardsWhenLaterShardFails(t *testing.T) 
 	}
 }
 
+func TestRuntimeServiceStatusReturnsRunningShards(t *testing.T) {
+	service := NewRuntimeService(
+		domain.ManagedLayout{},
+		&fakeInstallationStateRepository{},
+		&fakeRuntimeClusterConfigRepository{},
+		&fakeShardProcessStarter{},
+	)
+	service.processes[domain.ShardCaves] = fakeRuntimeProcess{pid: 202}
+	service.processes[domain.ShardMaster] = fakeRuntimeProcess{pid: 101}
+
+	status, err := service.Status(context.Background())
+	if err != nil {
+		t.Fatalf("Status() error = %v", err)
+	}
+	if status.Status != domain.ServerStatusRunning {
+		t.Fatalf("status = %q, want running", status.Status)
+	}
+	if len(status.Shards) != 2 {
+		t.Fatalf("shard count = %d, want 2", len(status.Shards))
+	}
+	if status.Shards[0].Name != domain.ShardMaster || status.Shards[0].PID != 101 {
+		t.Fatalf("first shard = %#v, want master pid 101", status.Shards[0])
+	}
+}
+
+func TestRuntimeServiceStopKillsRunningShards(t *testing.T) {
+	master := &trackedRuntimeProcess{pid: 101}
+	caves := &trackedRuntimeProcess{pid: 202}
+	service := NewRuntimeService(
+		domain.ManagedLayout{},
+		&fakeInstallationStateRepository{},
+		&fakeRuntimeClusterConfigRepository{},
+		&fakeShardProcessStarter{},
+	)
+	service.processes[domain.ShardMaster] = master
+	service.processes[domain.ShardCaves] = caves
+	service.cancels[domain.ShardMaster] = func() {}
+	service.cancels[domain.ShardCaves] = func() {}
+
+	if err := service.Stop(context.Background()); err != nil {
+		t.Fatalf("Stop() error = %v", err)
+	}
+	if !master.killed || !caves.killed {
+		t.Fatalf("killed master=%v caves=%v, want both true", master.killed, caves.killed)
+	}
+	if len(service.processes) != 0 {
+		t.Fatalf("process count = %d, want 0", len(service.processes))
+	}
+}
+
+func TestRuntimeServiceStopRejectsWhenNotRunning(t *testing.T) {
+	service := NewRuntimeService(
+		domain.ManagedLayout{},
+		&fakeInstallationStateRepository{},
+		&fakeRuntimeClusterConfigRepository{},
+		&fakeShardProcessStarter{},
+	)
+
+	err := service.Stop(context.Background())
+	if !errors.Is(err, domain.ErrServerNotRunning) {
+		t.Fatalf("Stop() error = %v, want %v", err, domain.ErrServerNotRunning)
+	}
+}
+
 type fakeRuntimeClusterConfigRepository struct {
 	config domain.ClusterConfig
 	err    error

@@ -255,6 +255,59 @@ dd {
   padding-top: 1rem;
 }
 
+.runtime-layout,
+.runtime-meta,
+.runtime-shards {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.runtime-layout {
+  padding-top: 1rem;
+}
+
+.runtime-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(240px, 0.7fr);
+  gap: 0.85rem;
+}
+
+.runtime-copy,
+.shard-runtime-card {
+  border: 1px solid #edf0f3;
+  border-radius: 8px;
+  background: #fbfcfd;
+}
+
+.runtime-copy {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem;
+}
+
+.runtime-copy p {
+  color: #65707d;
+  line-height: 1.5;
+}
+
+.shard-runtime-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.95rem;
+}
+
+.shard-runtime-card > div {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.shard-runtime-card small {
+  color: #65707d;
+}
+
 .cluster-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.3fr) minmax(260px, 0.7fr);
@@ -601,6 +654,7 @@ dd {
 
   .cluster-layout,
   .cluster-form,
+  .runtime-hero,
   .init-hero,
   .checkpoint-list,
   .task-head,

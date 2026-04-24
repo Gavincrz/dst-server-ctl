@@ -17,6 +17,7 @@ type Services struct {
 	Installation InstallationStatusReader
 	Cluster      ClusterConfigManager
 	InstallTasks InstallationTaskService
+	Runtime      RuntimeService
 }
 
 type StatusReader interface {
@@ -35,6 +36,12 @@ type InstallationTaskService interface {
 type ClusterConfigManager interface {
 	Get(ctx context.Context) (domain.ClusterConfig, error)
 	Update(ctx context.Context, config domain.ClusterConfig) (domain.ClusterConfig, error)
+}
+
+type RuntimeService interface {
+	Status(ctx context.Context) (domain.RuntimeStatus, error)
+	Start(ctx context.Context) error
+	Stop(ctx context.Context) error
 }
 
 func NewRouter(logger *slog.Logger, services Services) http.Handler {
@@ -129,6 +136,65 @@ func NewRouter(logger *slog.Logger, services Services) http.Handler {
 		respondJSON(w, taskListResponseFromDomain(tasks))
 	})
 
+	mux.HandleFunc("GET /api/v1/runtime", func(w http.ResponseWriter, r *http.Request) {
+		status, err := services.Runtime.Status(r.Context())
+		if err != nil {
+			logger.Error("runtime status failed", "error", err)
+			respondError(w, http.StatusInternalServerError, "runtime status unavailable")
+			return
+		}
+
+		respondJSON(w, runtimeResponseFromDomain(status))
+	})
+
+	mux.HandleFunc("POST /api/v1/runtime/start", func(w http.ResponseWriter, r *http.Request) {
+		err := services.Runtime.Start(r.Context())
+		switch {
+		case errors.Is(err, domain.ErrDSTNotInstalled):
+			respondError(w, http.StatusConflict, "dst is not installed")
+			return
+		case errors.Is(err, domain.ErrServerAlreadyRunning):
+			respondError(w, http.StatusConflict, "server already running")
+			return
+		case err != nil:
+			logger.Error("runtime start failed", "error", err)
+			respondError(w, http.StatusInternalServerError, "runtime start failed")
+			return
+		}
+
+		status, err := services.Runtime.Status(r.Context())
+		if err != nil {
+			logger.Error("runtime status after start failed", "error", err)
+			respondError(w, http.StatusInternalServerError, "runtime status unavailable")
+			return
+		}
+
+		w.WriteHeader(http.StatusAccepted)
+		respondJSON(w, runtimeResponseFromDomain(status))
+	})
+
+	mux.HandleFunc("POST /api/v1/runtime/stop", func(w http.ResponseWriter, r *http.Request) {
+		err := services.Runtime.Stop(r.Context())
+		switch {
+		case errors.Is(err, domain.ErrServerNotRunning):
+			respondError(w, http.StatusConflict, "server is not running")
+			return
+		case err != nil:
+			logger.Error("runtime stop failed", "error", err)
+			respondError(w, http.StatusInternalServerError, "runtime stop failed")
+			return
+		}
+
+		status, err := services.Runtime.Status(r.Context())
+		if err != nil {
+			logger.Error("runtime status after stop failed", "error", err)
+			respondError(w, http.StatusInternalServerError, "runtime status unavailable")
+			return
+		}
+
+		respondJSON(w, runtimeResponseFromDomain(status))
+	})
+
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, map[string]string{"status": "ok"})
 	})
@@ -191,6 +257,18 @@ type clusterResponse struct {
 type shardResponse struct {
 	Name    string `json:"name"`
 	Enabled bool   `json:"enabled"`
+}
+
+type runtimeResponse struct {
+	Status    string               `json:"status"`
+	Shards    []runtimeShardStatus `json:"shards"`
+	LastError string               `json:"lastError,omitempty"`
+}
+
+type runtimeShardStatus struct {
+	Name    string `json:"name"`
+	Running bool   `json:"running"`
+	PID     int    `json:"pid,omitempty"`
 }
 
 type updateClusterRequest struct {
@@ -257,6 +335,23 @@ func clusterResponseFromDomain(config domain.ClusterConfig) clusterResponse {
 		Shards:             shards,
 		CreatedAt:          config.CreatedAt,
 		UpdatedAt:          config.UpdatedAt,
+	}
+}
+
+func runtimeResponseFromDomain(status domain.RuntimeStatus) runtimeResponse {
+	shards := make([]runtimeShardStatus, 0, len(status.Shards))
+	for _, shard := range status.Shards {
+		shards = append(shards, runtimeShardStatus{
+			Name:    string(shard.Name),
+			Running: shard.Running,
+			PID:     shard.PID,
+		})
+	}
+
+	return runtimeResponse{
+		Status:    string(status.Status),
+		Shards:    shards,
+		LastError: status.LastError,
 	}
 }
 

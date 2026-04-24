@@ -294,6 +294,101 @@ func TestUpdateClusterConfigEndpointReturnsInternalServerError(t *testing.T) {
 	}
 }
 
+func TestRuntimeStatusEndpoint(t *testing.T) {
+	router := NewRouter(testLogger(), Services{
+		Status:       fakeStatusReader{},
+		Installation: fakeInstallationStatusReader{},
+		Cluster:      fakeClusterConfigService{},
+		InstallTasks: fakeInstallationTaskService{},
+		Runtime: fakeRuntimeService{
+			status: domain.RuntimeStatus{
+				Status: domain.ServerStatusRunning,
+				Shards: []domain.ShardState{
+					{Name: domain.ShardMaster, Running: true, PID: 101},
+				},
+			},
+		},
+	})
+
+	request := httptest.NewRequest(nethttp.MethodGet, "/api/v1/runtime", nil)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	if response.Code != nethttp.StatusOK {
+		t.Fatalf("status = %d, want %d", response.Code, nethttp.StatusOK)
+	}
+
+	var payload runtimeResponse
+	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode response error = %v", err)
+	}
+	if payload.Status != "running" {
+		t.Fatalf("status = %q, want running", payload.Status)
+	}
+	if len(payload.Shards) != 1 || payload.Shards[0].PID != 101 {
+		t.Fatalf("shards = %#v, want master pid 101", payload.Shards)
+	}
+}
+
+func TestRuntimeStartEndpoint(t *testing.T) {
+	router := NewRouter(testLogger(), Services{
+		Status:       fakeStatusReader{},
+		Installation: fakeInstallationStatusReader{},
+		Cluster:      fakeClusterConfigService{},
+		InstallTasks: fakeInstallationTaskService{},
+		Runtime: fakeRuntimeService{
+			status: domain.RuntimeStatus{
+				Status: domain.ServerStatusRunning,
+				Shards: []domain.ShardState{{Name: domain.ShardMaster, Running: true, PID: 101}},
+			},
+		},
+	})
+
+	request := httptest.NewRequest(nethttp.MethodPost, "/api/v1/runtime/start", nil)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	if response.Code != nethttp.StatusAccepted {
+		t.Fatalf("status = %d, want %d", response.Code, nethttp.StatusAccepted)
+	}
+}
+
+func TestRuntimeStartEndpointReturnsConflict(t *testing.T) {
+	router := NewRouter(testLogger(), Services{
+		Status:       fakeStatusReader{},
+		Installation: fakeInstallationStatusReader{},
+		Cluster:      fakeClusterConfigService{},
+		InstallTasks: fakeInstallationTaskService{},
+		Runtime:      fakeRuntimeService{startErr: domain.ErrDSTNotInstalled},
+	})
+
+	request := httptest.NewRequest(nethttp.MethodPost, "/api/v1/runtime/start", nil)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	if response.Code != nethttp.StatusConflict {
+		t.Fatalf("status = %d, want %d", response.Code, nethttp.StatusConflict)
+	}
+}
+
+func TestRuntimeStopEndpoint(t *testing.T) {
+	router := NewRouter(testLogger(), Services{
+		Status:       fakeStatusReader{},
+		Installation: fakeInstallationStatusReader{},
+		Cluster:      fakeClusterConfigService{},
+		InstallTasks: fakeInstallationTaskService{},
+		Runtime:      fakeRuntimeService{status: domain.RuntimeStatus{Status: domain.ServerStatusStopped}},
+	})
+
+	request := httptest.NewRequest(nethttp.MethodPost, "/api/v1/runtime/stop", nil)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	if response.Code != nethttp.StatusOK {
+		t.Fatalf("status = %d, want %d", response.Code, nethttp.StatusOK)
+	}
+}
+
 type fakeStatusReader struct{}
 
 func (fakeStatusReader) Status() domain.Status {
@@ -326,6 +421,13 @@ type fakeClusterConfigService struct {
 	updateErr error
 }
 
+type fakeRuntimeService struct {
+	status    domain.RuntimeStatus
+	statusErr error
+	startErr  error
+	stopErr   error
+}
+
 func (s fakeInstallationTaskService) ListTasks(context.Context) ([]domain.Task, error) {
 	if s.listErr != nil {
 		return nil, s.listErr
@@ -352,6 +454,21 @@ func (s fakeClusterConfigService) Update(_ context.Context, config domain.Cluste
 		return domain.ClusterConfig{}, s.updateErr
 	}
 	return s.updated, nil
+}
+
+func (s fakeRuntimeService) Status(context.Context) (domain.RuntimeStatus, error) {
+	if s.statusErr != nil {
+		return domain.RuntimeStatus{}, s.statusErr
+	}
+	return s.status, nil
+}
+
+func (s fakeRuntimeService) Start(context.Context) error {
+	return s.startErr
+}
+
+func (s fakeRuntimeService) Stop(context.Context) error {
+	return s.stopErr
 }
 
 func testLogger() *slog.Logger {

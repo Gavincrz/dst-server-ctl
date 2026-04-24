@@ -13,6 +13,7 @@ var ErrInstallAlreadyInProgress = errors.New("install already in progress")
 var ErrInstallNotRequired = errors.New("install not required")
 var ErrDSTNotInstalled = errors.New("dst not installed")
 var ErrServerAlreadyRunning = errors.New("server already running")
+var ErrServerNotRunning = errors.New("server not running")
 
 type ShardName string
 
@@ -42,6 +43,18 @@ type Status struct {
 	Version   string       `json:"version"`
 	Status    ServerStatus `json:"status"`
 	StartedAt *time.Time   `json:"startedAt,omitempty"`
+}
+
+type RuntimeStatus struct {
+	Status    ServerStatus `json:"status"`
+	Shards    []ShardState `json:"shards"`
+	LastError string       `json:"lastError,omitempty"`
+}
+
+type ShardState struct {
+	Name    ShardName `json:"name"`
+	Running bool      `json:"running"`
+	PID     int       `json:"pid,omitempty"`
 }
 
 type InstallationState struct {

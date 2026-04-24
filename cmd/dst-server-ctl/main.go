@@ -12,6 +12,7 @@ import (
 
 	"dst-server-ctl/internal/adapter/command"
 	"dst-server-ctl/internal/adapter/dstconfig"
+	"dst-server-ctl/internal/adapter/dstserver"
 	"dst-server-ctl/internal/adapter/paths"
 	"dst-server-ctl/internal/adapter/sqlite"
 	"dst-server-ctl/internal/adapter/steamcmd"
@@ -58,6 +59,12 @@ func main() {
 		taskService,
 		steamcmd.NewClient(command.ExecRunner{}),
 	)
+	runtimeService := service.NewRuntimeService(
+		layout,
+		store,
+		store,
+		dstserver.NewClient(command.ExecRunner{}),
+	)
 
 	server := &http.Server{
 		Addr: "127.0.0.1:8737",
@@ -66,6 +73,7 @@ func main() {
 			Installation: installationService,
 			Cluster:      clusterService,
 			InstallTasks: installRunnerService,
+			Runtime:      runtimeService,
 		}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}

@@ -37,20 +37,36 @@
     updatedAt: string;
   };
 
+  type RuntimeShardStatus = {
+    name: string;
+    running: boolean;
+    pid?: number;
+  };
+
+  type RuntimeStatus = {
+    status: string;
+    shards: RuntimeShardStatus[];
+    lastError?: string;
+  };
+
   let controller: ControllerStatus | null = null;
   let installation: InstallationStatus | null = null;
   let cluster: ClusterConfig | null = null;
   let clusterForm: ClusterFormState | null = null;
+  let runtime: RuntimeStatus | null = null;
   let installTasks: InstallationTask[] = [];
   let loading = true;
   let polling = false;
   let installSubmitting = false;
   let clusterSubmitting = false;
+  let runtimeSubmitting = false;
   let refreshError = '';
   let installError = '';
   let clusterError = '';
+  let runtimeError = '';
   let actionMessage = '';
   let clusterMessage = '';
+  let runtimeMessage = '';
   let refreshedAt: Date | null = null;
 
   async function fetchJSON<T>(path: string): Promise<T> {
@@ -93,10 +109,11 @@
     refreshError = '';
 
     try {
-      const [controllerStatus, installationStatus, clusterConfig, tasks] = await Promise.all([
+      const [controllerStatus, installationStatus, clusterConfig, runtimeStatus, tasks] = await Promise.all([
         fetchJSON<ControllerStatus>('/api/v1/status'),
         fetchJSON<InstallationStatus>('/api/v1/installation'),
         fetchJSON<ClusterConfig>('/api/v1/cluster'),
+        fetchJSON<RuntimeStatus>('/api/v1/runtime'),
         fetchJSON<InstallationTask[]>('/api/v1/install/tasks')
       ]);
 
@@ -104,6 +121,7 @@
       controller = controllerStatus;
       installation = installationStatus;
       cluster = clusterConfig;
+      runtime = runtimeStatus;
       installTasks = tasks;
       if (!clusterForm || !previousCluster || !clusterFormIsDirty(clusterForm, previousCluster)) {
         clusterForm = clusterFormFromConfig(clusterConfig);
@@ -177,6 +195,28 @@
       return false;
     }
     return !hasActiveInstallTasks(tasks);
+  }
+
+  function runtimeRunning(status: RuntimeStatus | null) {
+    return status?.status === 'running';
+  }
+
+  function runtimeActionLabel(status: RuntimeStatus | null) {
+    if (runtimeSubmitting) {
+      return runtimeRunning(status) ? 'Start Server' : 'Starting';
+    }
+    return 'Start Server';
+  }
+
+  function canStartRuntime(status: RuntimeStatus | null, install: InstallationStatus | null) {
+    if (!install?.dstInstalled) {
+      return false;
+    }
+    return !runtimeRunning(status);
+  }
+
+  function canStopRuntime(status: RuntimeStatus | null) {
+    return runtimeRunning(status);
   }
 
   function taskTypeLabel(type: string) {
@@ -354,12 +394,72 @@
     }
   }
 
+  async function startRuntime() {
+    runtimeSubmitting = true;
+    runtimeError = '';
+    runtimeMessage = '';
+
+    try {
+      const response = await fetch('/api/v1/runtime/start', { method: 'POST' });
+      if (!response.ok) {
+        let message = `Runtime start returned HTTP ${response.status}`;
+        try {
+          const payload = (await response.json()) as { error?: string };
+          if (payload.error) {
+            message = payload.error;
+          }
+        } catch {
+          // Ignore JSON parse failures and keep the status-based message.
+        }
+        throw new Error(message);
+      }
+
+      runtime = (await response.json()) as RuntimeStatus;
+      runtimeMessage = 'Managed shards started from the generated cluster layout.';
+      refreshedAt = new Date();
+    } catch (err) {
+      runtimeError = err instanceof Error ? err.message : 'Runtime start failed';
+    } finally {
+      runtimeSubmitting = false;
+    }
+  }
+
+  async function stopRuntime() {
+    runtimeSubmitting = true;
+    runtimeError = '';
+    runtimeMessage = '';
+
+    try {
+      const response = await fetch('/api/v1/runtime/stop', { method: 'POST' });
+      if (!response.ok) {
+        let message = `Runtime stop returned HTTP ${response.status}`;
+        try {
+          const payload = (await response.json()) as { error?: string };
+          if (payload.error) {
+            message = payload.error;
+          }
+        } catch {
+          // Ignore JSON parse failures and keep the status-based message.
+        }
+        throw new Error(message);
+      }
+
+      runtime = (await response.json()) as RuntimeStatus;
+      runtimeMessage = 'Managed shard processes were stopped.';
+      refreshedAt = new Date();
+    } catch (err) {
+      runtimeError = err instanceof Error ? err.message : 'Runtime stop failed';
+    } finally {
+      runtimeSubmitting = false;
+    }
+  }
+
   onMount(() => {
     let pollTimer: ReturnType<typeof setInterval> | null = null;
 
     void refreshNow();
     pollTimer = setInterval(() => {
-      if (!hasActiveInstallTasks(installTasks) || installSubmitting) {
+      if ((!hasActiveInstallTasks(installTasks) && !runtimeRunning(runtime)) || installSubmitting || runtimeSubmitting) {
         return;
       }
       void refresh({ background: true });
@@ -398,6 +498,13 @@
     </section>
   {/if}
 
+  {#if runtimeMessage}
+    <section class="notice notice-success" aria-live="polite">
+      <span>Runtime</span>
+      <strong>{runtimeMessage}</strong>
+    </section>
+  {/if}
+
   {#if installError}
     <section class="notice" aria-live="polite">
       <span>Install Request Failed</span>
@@ -409,6 +516,13 @@
     <section class="notice" aria-live="polite">
       <span>Cluster Save Failed</span>
       <strong>{clusterError}</strong>
+    </section>
+  {/if}
+
+  {#if runtimeError}
+    <section class="notice" aria-live="polite">
+      <span>Runtime Request Failed</span>
+      <strong>{runtimeError}</strong>
     </section>
   {/if}
 
@@ -430,14 +544,85 @@
       </small>
     </div>
     <div class="metric">
-      <span>Initialization</span>
-      <strong>{overallInstallState(installation)}</strong>
-      <small>{hasActiveInstallTasks(installTasks) ? 'install in progress' : 'managed instance'}</small>
+      <span>Runtime</span>
+      <strong>{runtime?.status ?? 'Loading'}</strong>
+      <small>{runtimeRunning(runtime) ? 'managed shards active' : 'managed shards stopped'}</small>
     </div>
     <div class="metric">
       <span>Last Refresh</span>
       <strong>{refreshedAt ? refreshedAt.toLocaleTimeString() : '-'}</strong>
       <small>{loading ? 'loading' : polling ? 'polling install progress' : 'current snapshot'}</small>
+    </div>
+  </section>
+
+  <section class="panel panel-wide" aria-label="Runtime control">
+    <div class="panel-heading">
+      <div>
+        <h2>Runtime Control</h2>
+        <p class="subtle">Start or stop the managed Master and Caves shard processes from the controller.</p>
+      </div>
+      <div class="panel-actions">
+        <button type="button" disabled={!canStopRuntime(runtime) || runtimeSubmitting} on:click={stopRuntime}>
+          {runtimeSubmitting && runtimeRunning(runtime) ? 'Stopping' : 'Stop Server'}
+        </button>
+        <button type="button" class="secondary-action" disabled={!canStartRuntime(runtime, installation) || runtimeSubmitting} on:click={startRuntime}>
+          {runtimeActionLabel(runtime)}
+        </button>
+      </div>
+    </div>
+
+    <div class="runtime-layout">
+      <div class="runtime-hero">
+        <div class="runtime-copy">
+          <span class={`badge badge-${runtimeRunning(runtime) ? 'succeeded' : 'idle'}`}>
+            {runtime?.status ?? 'loading'}
+          </span>
+          <h3>{runtimeRunning(runtime) ? 'Managed shards are running' : 'Managed shards are stopped'}</h3>
+          <p>
+            {#if !installation?.dstInstalled}
+              Install the DST dedicated server before starting runtime processes.
+            {:else if runtimeRunning(runtime)}
+              The controller has active shard processes bound to the generated cluster layout under <code>clusters/primary</code>.
+            {:else}
+              Start the managed server to launch enabled shards from the current cluster configuration.
+            {/if}
+          </p>
+          {#if runtime?.lastError}
+            <p class="task-error">{runtime.lastError}</p>
+          {/if}
+        </div>
+        <div class="runtime-meta">
+          <article class="checkpoint" class:complete={runtimeRunning(runtime)}>
+            <strong>Runtime State</strong>
+            <span>{runtime?.status ?? 'Loading'}</span>
+          </article>
+          <article class="checkpoint" class:complete={installation?.dstInstalled}>
+            <strong>DST Installed</strong>
+            <span>{installation ? boolLabel(installation.dstInstalled) : 'Loading'}</span>
+          </article>
+        </div>
+      </div>
+
+      <div class="runtime-shards">
+        {#if runtime && runtime.shards.length > 0}
+          {#each runtime.shards as shard}
+            <article class="shard-runtime-card">
+              <div>
+                <strong>{shard.name}</strong>
+                <small>{shard.running ? `PID ${shard.pid}` : 'Stopped'}</small>
+              </div>
+              <span class={`badge badge-${shard.running ? 'succeeded' : 'idle'}`}>
+                {shard.running ? 'Running' : 'Stopped'}
+              </span>
+            </article>
+          {/each}
+        {:else}
+          <div class="empty-state">
+            <strong>No running shards</strong>
+            <p>The controller is not currently supervising Master or Caves processes.</p>
+          </div>
+        {/if}
+      </div>
     </div>
   </section>
 
