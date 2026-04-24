@@ -20,11 +20,11 @@
 
 ## 下一任务
 
-- [ ] 为修改类 API 添加 admin token 校验骨架，并保持默认只监听 `127.0.0.1`。
+- [ ] 定义受管 cluster 的基础结构化配置状态和读写 API。
 
 ## 后续任务
 
-- [ ] 定义受管 cluster 的基础结构化配置状态和读写 API。
+- [ ] 为 cluster 配置生成基础 `cluster.ini` 和 shard `server.ini` 输出。
 
 ## 暂时不要做
 
@@ -43,5 +43,4 @@
 
 ## 未决问题
 
-- admin token 应该只存在文件里，还是也允许环境变量覆盖。
 - 第一版公开发布时，`leveldataoverride.lua` 要做到多完整的可视化。
