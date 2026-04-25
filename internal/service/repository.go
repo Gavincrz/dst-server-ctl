@@ -22,3 +22,8 @@ type TaskRepository interface {
 	ListTasks(ctx context.Context) ([]domain.Task, error)
 	UpdateTask(ctx context.Context, task domain.Task) error
 }
+
+type RuntimeEventRepository interface {
+	CreateRuntimeEvent(ctx context.Context, event domain.RuntimeEvent) error
+	ListRuntimeEvents(ctx context.Context, limit int) ([]domain.RuntimeEvent, error)
+}

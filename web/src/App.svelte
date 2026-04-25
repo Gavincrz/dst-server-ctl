@@ -55,6 +55,14 @@
     lines: string[];
   };
 
+  type RuntimeHistoryEvent = {
+    id: number;
+    shard: string;
+    kind: string;
+    detail: string;
+    createdAt: string;
+  };
+
   let controller: ControllerStatus | null = null;
   let installation: InstallationStatus | null = null;
   let cluster: ClusterConfig | null = null;
@@ -64,6 +72,7 @@
     Master: [],
     Caves: []
   };
+  let runtimeHistory: RuntimeHistoryEvent[] = [];
   let installTasks: InstallationTask[] = [];
   let loading = true;
   let polling = false;
@@ -119,14 +128,15 @@
     refreshError = '';
 
     try {
-      const [controllerStatus, installationStatus, clusterConfig, runtimeStatus, tasks, masterLogs, cavesLogs] = await Promise.all([
+      const [controllerStatus, installationStatus, clusterConfig, runtimeStatus, tasks, masterLogs, cavesLogs, history] = await Promise.all([
         fetchJSON<ControllerStatus>('/api/v1/status'),
         fetchJSON<InstallationStatus>('/api/v1/installation'),
         fetchJSON<ClusterConfig>('/api/v1/cluster'),
         fetchJSON<RuntimeStatus>('/api/v1/runtime'),
         fetchJSON<InstallationTask[]>('/api/v1/install/tasks'),
         fetchJSON<RuntimeLogResponse>('/api/v1/runtime/logs?shard=Master&lines=120'),
-        fetchJSON<RuntimeLogResponse>('/api/v1/runtime/logs?shard=Caves&lines=120')
+        fetchJSON<RuntimeLogResponse>('/api/v1/runtime/logs?shard=Caves&lines=120'),
+        fetchJSON<RuntimeHistoryEvent[]>('/api/v1/runtime/history?limit=12')
       ]);
 
       const previousCluster = cluster;
@@ -138,6 +148,7 @@
         Master: masterLogs.lines,
         Caves: cavesLogs.lines
       };
+      runtimeHistory = history;
       installTasks = tasks;
       if (!clusterForm || !previousCluster || !clusterFormIsDirty(clusterForm, previousCluster)) {
         clusterForm = clusterFormFromConfig(clusterConfig);
@@ -264,6 +275,21 @@
         return 'Idle';
       default:
         return status.split('_').join(' ');
+    }
+  }
+
+  function runtimeEventLabel(kind: string) {
+    switch (kind) {
+      case 'started':
+        return 'Started';
+      case 'stopped':
+        return 'Stopped';
+      case 'exited':
+        return 'Exited';
+      case 'retried':
+        return 'Retried';
+      default:
+        return kind;
     }
   }
 
@@ -711,6 +737,39 @@
         <pre class="log-output">{runtimeLogs.Caves.length > 0 ? runtimeLogs.Caves.join('\n') : 'No Caves log output yet.'}</pre>
       </article>
     </div>
+  </section>
+
+  <section class="panel panel-wide" aria-label="Runtime history">
+    <div class="panel-heading">
+      <div>
+        <h2>Runtime History</h2>
+        <p class="subtle">Recent persisted runtime events for shard start, stop, exit and auto-retry activity.</p>
+      </div>
+    </div>
+
+    {#if runtimeHistory.length > 0}
+      <div class="history-list">
+        {#each runtimeHistory as event}
+          <article class="task">
+            <div class="task-head">
+              <div>
+                <strong>{event.shard}</strong>
+                <small>{event.detail}</small>
+              </div>
+              <span class={`badge badge-${event.kind === 'exited' ? 'failed' : event.kind === 'retried' ? 'running' : 'succeeded'}`}>
+                {runtimeEventLabel(event.kind)}
+              </span>
+            </div>
+            <small class="history-meta">{formatDate(event.createdAt)}</small>
+          </article>
+        {/each}
+      </div>
+    {:else}
+      <div class="empty-state">
+        <strong>No runtime history yet</strong>
+        <p>Shard lifecycle events will appear here after the controller starts supervising processes.</p>
+      </div>
+    {/if}
   </section>
 
   <section class="panel panel-wide" aria-label="Cluster configuration">

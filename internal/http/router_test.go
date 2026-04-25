@@ -309,6 +309,7 @@ func TestRuntimeStatusEndpoint(t *testing.T) {
 				},
 			},
 		},
+		RuntimeHistory: fakeRuntimeHistoryService{},
 	})
 
 	request := httptest.NewRequest(nethttp.MethodGet, "/api/v1/runtime", nil)
@@ -346,6 +347,7 @@ func TestRuntimeStartEndpoint(t *testing.T) {
 				Shards: []domain.ShardState{{Name: domain.ShardMaster, Running: true, PID: 101}},
 			},
 		},
+		RuntimeHistory: fakeRuntimeHistoryService{},
 	})
 
 	request := httptest.NewRequest(nethttp.MethodPost, "/api/v1/runtime/start", nil)
@@ -359,11 +361,12 @@ func TestRuntimeStartEndpoint(t *testing.T) {
 
 func TestRuntimeStartEndpointReturnsConflict(t *testing.T) {
 	router := NewRouter(testLogger(), Services{
-		Status:       fakeStatusReader{},
-		Installation: fakeInstallationStatusReader{},
-		Cluster:      fakeClusterConfigService{},
-		InstallTasks: fakeInstallationTaskService{},
-		Runtime:      fakeRuntimeService{startErr: domain.ErrDSTNotInstalled},
+		Status:         fakeStatusReader{},
+		Installation:   fakeInstallationStatusReader{},
+		Cluster:        fakeClusterConfigService{},
+		InstallTasks:   fakeInstallationTaskService{},
+		Runtime:        fakeRuntimeService{startErr: domain.ErrDSTNotInstalled},
+		RuntimeHistory: fakeRuntimeHistoryService{},
 	})
 
 	request := httptest.NewRequest(nethttp.MethodPost, "/api/v1/runtime/start", nil)
@@ -377,11 +380,12 @@ func TestRuntimeStartEndpointReturnsConflict(t *testing.T) {
 
 func TestRuntimeStopEndpoint(t *testing.T) {
 	router := NewRouter(testLogger(), Services{
-		Status:       fakeStatusReader{},
-		Installation: fakeInstallationStatusReader{},
-		Cluster:      fakeClusterConfigService{},
-		InstallTasks: fakeInstallationTaskService{},
-		Runtime:      fakeRuntimeService{status: domain.RuntimeStatus{Status: domain.ServerStatusStopped}},
+		Status:         fakeStatusReader{},
+		Installation:   fakeInstallationStatusReader{},
+		Cluster:        fakeClusterConfigService{},
+		InstallTasks:   fakeInstallationTaskService{},
+		Runtime:        fakeRuntimeService{status: domain.RuntimeStatus{Status: domain.ServerStatusStopped}},
+		RuntimeHistory: fakeRuntimeHistoryService{},
 	})
 
 	request := httptest.NewRequest(nethttp.MethodPost, "/api/v1/runtime/stop", nil)
@@ -402,6 +406,7 @@ func TestRuntimeRestartEndpoint(t *testing.T) {
 		Runtime: fakeRuntimeService{
 			status: domain.RuntimeStatus{Status: domain.ServerStatusRunning},
 		},
+		RuntimeHistory: fakeRuntimeHistoryService{},
 	})
 
 	request := httptest.NewRequest(nethttp.MethodPost, "/api/v1/runtime/restart", nil)
@@ -415,12 +420,13 @@ func TestRuntimeRestartEndpoint(t *testing.T) {
 
 func TestRuntimeLogsEndpoint(t *testing.T) {
 	router := NewRouter(testLogger(), Services{
-		Status:       fakeStatusReader{},
-		Installation: fakeInstallationStatusReader{},
-		Cluster:      fakeClusterConfigService{},
-		InstallTasks: fakeInstallationTaskService{},
-		Runtime:      fakeRuntimeService{},
-		RuntimeLogs:  fakeRuntimeLogService{lines: []string{"[00:00:01]: Boot", "[00:00:02]: Ready"}},
+		Status:         fakeStatusReader{},
+		Installation:   fakeInstallationStatusReader{},
+		Cluster:        fakeClusterConfigService{},
+		InstallTasks:   fakeInstallationTaskService{},
+		Runtime:        fakeRuntimeService{},
+		RuntimeLogs:    fakeRuntimeLogService{lines: []string{"[00:00:01]: Boot", "[00:00:02]: Ready"}},
+		RuntimeHistory: fakeRuntimeHistoryService{},
 	})
 
 	request := httptest.NewRequest(nethttp.MethodGet, "/api/v1/runtime/logs?shard=Master&lines=50", nil)
@@ -440,6 +446,38 @@ func TestRuntimeLogsEndpoint(t *testing.T) {
 	}
 	if len(payload.Lines) != 2 {
 		t.Fatalf("line count = %d, want 2", len(payload.Lines))
+	}
+}
+
+func TestRuntimeHistoryEndpoint(t *testing.T) {
+	router := NewRouter(testLogger(), Services{
+		Status:       fakeStatusReader{},
+		Installation: fakeInstallationStatusReader{},
+		Cluster:      fakeClusterConfigService{},
+		InstallTasks: fakeInstallationTaskService{},
+		Runtime:      fakeRuntimeService{},
+		RuntimeLogs:  fakeRuntimeLogService{},
+		RuntimeHistory: fakeRuntimeHistoryService{
+			events: []domain.RuntimeEvent{
+				{ID: 1, Shard: domain.ShardMaster, Kind: domain.RuntimeEventStarted, Detail: "started", CreatedAt: time.Date(2026, 4, 25, 1, 0, 0, 0, time.UTC)},
+			},
+		},
+	})
+
+	request := httptest.NewRequest(nethttp.MethodGet, "/api/v1/runtime/history?limit=10", nil)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	if response.Code != nethttp.StatusOK {
+		t.Fatalf("status = %d, want %d", response.Code, nethttp.StatusOK)
+	}
+
+	var payload []runtimeHistoryEventResponse
+	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode response error = %v", err)
+	}
+	if len(payload) != 1 || payload[0].Kind != "started" {
+		t.Fatalf("payload = %#v, want one started event", payload)
 	}
 }
 
@@ -488,6 +526,11 @@ type fakeRuntimeLogService struct {
 	err   error
 }
 
+type fakeRuntimeHistoryService struct {
+	events []domain.RuntimeEvent
+	err    error
+}
+
 func (s fakeInstallationTaskService) ListTasks(context.Context) ([]domain.Task, error) {
 	if s.listErr != nil {
 		return nil, s.listErr
@@ -527,12 +570,12 @@ func (s fakeRuntimeService) Start(context.Context) error {
 	return s.startErr
 }
 
-func (s fakeRuntimeService) Stop(context.Context) error {
-	return s.stopErr
-}
-
 func (s fakeRuntimeService) Restart(context.Context) error {
 	return s.restartErr
+}
+
+func (s fakeRuntimeService) Stop(context.Context) error {
+	return s.stopErr
 }
 
 func (s fakeRuntimeLogService) Get(context.Context, domain.ShardName, int) ([]string, error) {
@@ -540,6 +583,13 @@ func (s fakeRuntimeLogService) Get(context.Context, domain.ShardName, int) ([]st
 		return nil, s.err
 	}
 	return s.lines, nil
+}
+
+func (s fakeRuntimeHistoryService) List(context.Context, int) ([]domain.RuntimeEvent, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return s.events, nil
 }
 
 func testLogger() *slog.Logger {

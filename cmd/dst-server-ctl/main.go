@@ -64,19 +64,22 @@ func main() {
 		layout,
 		store,
 		store,
+		store,
 		dstserver.NewClient(command.ExecRunner{}),
 	)
 	runtimeLogService := service.NewRuntimeLogService(layout, logtail.Reader{})
+	runtimeHistoryService := service.NewRuntimeHistoryService(store)
 
 	server := &http.Server{
 		Addr: "127.0.0.1:8737",
 		Handler: apphttp.NewRouter(logger, apphttp.Services{
-			Status:       statusService,
-			Installation: installationService,
-			Cluster:      clusterService,
-			InstallTasks: installRunnerService,
-			Runtime:      runtimeService,
-			RuntimeLogs:  runtimeLogService,
+			Status:         statusService,
+			Installation:   installationService,
+			Cluster:        clusterService,
+			InstallTasks:   installRunnerService,
+			Runtime:        runtimeService,
+			RuntimeLogs:    runtimeLogService,
+			RuntimeHistory: runtimeHistoryService,
 		}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}

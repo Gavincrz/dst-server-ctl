@@ -14,12 +14,13 @@ import (
 )
 
 type Services struct {
-	Status       StatusReader
-	Installation InstallationStatusReader
-	Cluster      ClusterConfigManager
-	InstallTasks InstallationTaskService
-	Runtime      RuntimeService
-	RuntimeLogs  RuntimeLogService
+	Status         StatusReader
+	Installation   InstallationStatusReader
+	Cluster        ClusterConfigManager
+	InstallTasks   InstallationTaskService
+	Runtime        RuntimeService
+	RuntimeLogs    RuntimeLogService
+	RuntimeHistory RuntimeHistoryService
 }
 
 type StatusReader interface {
@@ -49,6 +50,10 @@ type RuntimeService interface {
 
 type RuntimeLogService interface {
 	Get(ctx context.Context, shard domain.ShardName, maxLines int) ([]string, error)
+}
+
+type RuntimeHistoryService interface {
+	List(ctx context.Context, limit int) ([]domain.RuntimeEvent, error)
 }
 
 func NewRouter(logger *slog.Logger, services Services) http.Handler {
@@ -254,6 +259,27 @@ func NewRouter(logger *slog.Logger, services Services) http.Handler {
 		})
 	})
 
+	mux.HandleFunc("GET /api/v1/runtime/history", func(w http.ResponseWriter, r *http.Request) {
+		limit := 20
+		if value := r.URL.Query().Get("limit"); value != "" {
+			var parsed int
+			if _, err := fmt.Sscanf(value, "%d", &parsed); err != nil {
+				respondError(w, http.StatusBadRequest, "limit must be an integer")
+				return
+			}
+			limit = parsed
+		}
+
+		events, err := services.RuntimeHistory.List(r.Context(), limit)
+		if err != nil {
+			logger.Error("runtime history failed", "error", err)
+			respondError(w, http.StatusInternalServerError, "runtime history unavailable")
+			return
+		}
+
+		respondJSON(w, runtimeHistoryResponseFromDomain(events))
+	})
+
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, map[string]string{"status": "ok"})
 	})
@@ -334,6 +360,14 @@ type runtimeShardStatus struct {
 type runtimeLogResponse struct {
 	Shard string   `json:"shard"`
 	Lines []string `json:"lines"`
+}
+
+type runtimeHistoryEventResponse struct {
+	ID        int64     `json:"id"`
+	Shard     string    `json:"shard"`
+	Kind      string    `json:"kind"`
+	Detail    string    `json:"detail"`
+	CreatedAt time.Time `json:"createdAt"`
 }
 
 type updateClusterRequest struct {
@@ -419,6 +453,20 @@ func runtimeResponseFromDomain(status domain.RuntimeStatus) runtimeResponse {
 		RestartRequired: status.RestartRequired,
 		LastError:       status.LastError,
 	}
+}
+
+func runtimeHistoryResponseFromDomain(events []domain.RuntimeEvent) []runtimeHistoryEventResponse {
+	response := make([]runtimeHistoryEventResponse, 0, len(events))
+	for _, event := range events {
+		response = append(response, runtimeHistoryEventResponse{
+			ID:        event.ID,
+			Shard:     string(event.Shard),
+			Kind:      string(event.Kind),
+			Detail:    event.Detail,
+			CreatedAt: event.CreatedAt,
+		})
+	}
+	return response
 }
 
 func (r updateClusterRequest) toDomain() domain.ClusterConfig {

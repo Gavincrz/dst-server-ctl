@@ -195,6 +195,46 @@ func TestGetTaskReturnsNotFound(t *testing.T) {
 	}
 }
 
+func TestRuntimeEventRepositoryCreatesAndListsEvents(t *testing.T) {
+	ctx := context.Background()
+	store := openTestStore(t, ctx)
+	defer store.Close()
+
+	first := domain.RuntimeEvent{
+		Shard:     domain.ShardMaster,
+		Kind:      domain.RuntimeEventStarted,
+		Detail:    "Master shard started",
+		CreatedAt: time.Date(2026, 4, 25, 2, 0, 0, 0, time.UTC),
+	}
+	second := domain.RuntimeEvent{
+		Shard:     domain.ShardMaster,
+		Kind:      domain.RuntimeEventExited,
+		Detail:    "Master shard exited",
+		CreatedAt: time.Date(2026, 4, 25, 2, 5, 0, 0, time.UTC),
+	}
+
+	if err := store.CreateRuntimeEvent(ctx, first); err != nil {
+		t.Fatalf("CreateRuntimeEvent(first) error = %v", err)
+	}
+	if err := store.CreateRuntimeEvent(ctx, second); err != nil {
+		t.Fatalf("CreateRuntimeEvent(second) error = %v", err)
+	}
+
+	events, err := store.ListRuntimeEvents(ctx, 10)
+	if err != nil {
+		t.Fatalf("ListRuntimeEvents() error = %v", err)
+	}
+	if len(events) != 2 {
+		t.Fatalf("event count = %d, want 2", len(events))
+	}
+	if events[0].Kind != domain.RuntimeEventExited {
+		t.Fatalf("first kind = %q, want exited", events[0].Kind)
+	}
+	if events[1].Kind != domain.RuntimeEventStarted {
+		t.Fatalf("second kind = %q, want started", events[1].Kind)
+	}
+}
+
 func openTestStore(t *testing.T, ctx context.Context) *Store {
 	t.Helper()
 

@@ -59,6 +59,23 @@ type ShardState struct {
 	PID     int       `json:"pid,omitempty"`
 }
 
+type RuntimeEventKind string
+
+const (
+	RuntimeEventStarted RuntimeEventKind = "started"
+	RuntimeEventStopped RuntimeEventKind = "stopped"
+	RuntimeEventExited  RuntimeEventKind = "exited"
+	RuntimeEventRetried RuntimeEventKind = "retried"
+)
+
+type RuntimeEvent struct {
+	ID        int64            `json:"id"`
+	Shard     ShardName        `json:"shard"`
+	Kind      RuntimeEventKind `json:"kind"`
+	Detail    string           `json:"detail"`
+	CreatedAt time.Time        `json:"createdAt"`
+}
+
 type InstallationState struct {
 	ManagedRoot         string
 	SteamCMDInstalledAt *time.Time

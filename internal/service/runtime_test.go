@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -37,6 +38,7 @@ func TestRuntimeServiceStartLaunchesEnabledShards(t *testing.T) {
 				},
 			},
 		},
+		&fakeRuntimeEventRepository{},
 		starter,
 	)
 	service.dispatch = func(fn func()) {}
@@ -58,6 +60,7 @@ func TestRuntimeServiceStartRejectsWhenDSTNotInstalled(t *testing.T) {
 		domain.ManagedLayout{},
 		&fakeInstallationStateRepository{state: domain.InstallationState{ManagedRoot: "/srv/managed"}},
 		&fakeRuntimeClusterConfigRepository{},
+		&fakeRuntimeEventRepository{},
 		&fakeShardProcessStarter{},
 	)
 
@@ -78,6 +81,7 @@ func TestRuntimeServiceStartRejectsWhenAlreadyRunning(t *testing.T) {
 			},
 		},
 		&fakeRuntimeClusterConfigRepository{},
+		&fakeRuntimeEventRepository{},
 		&fakeShardProcessStarter{},
 	)
 	service.processes[domain.ShardMaster] = fakeRuntimeProcess{pid: 101}
@@ -116,6 +120,7 @@ func TestRuntimeServiceStartStopsStartedShardsWhenLaterShardFails(t *testing.T) 
 				},
 			},
 		},
+		&fakeRuntimeEventRepository{},
 		starter,
 	)
 	service.dispatch = func(fn func()) {}
@@ -132,12 +137,13 @@ func TestRuntimeServiceStartStopsStartedShardsWhenLaterShardFails(t *testing.T) 
 	}
 }
 
-func TestRuntimeServiceWatchShardClearsStateOnUnexpectedExit(t *testing.T) {
+func TestRuntimeServiceWatchShardAutomaticallyRestartsOnceOnUnexpectedExit(t *testing.T) {
 	now := time.Date(2026, 4, 24, 14, 0, 0, 0, time.UTC)
-	process := &controlledRuntimeProcess{pid: 101, waitCh: make(chan error, 1)}
+	first := &controlledRuntimeProcess{pid: 101, waitCh: make(chan error, 1)}
+	second := &controlledRuntimeProcess{pid: 202, waitCh: make(chan error, 1)}
 	starter := &fakeShardProcessStarter{
-		processes: map[domain.ShardName]command.Process{
-			domain.ShardMaster: process,
+		processSequence: map[domain.ShardName][]command.Process{
+			domain.ShardMaster: {first, second},
 		},
 	}
 
@@ -154,6 +160,7 @@ func TestRuntimeServiceWatchShardClearsStateOnUnexpectedExit(t *testing.T) {
 				Shards: []domain.ShardConfig{{Name: domain.ShardMaster, Enabled: true}},
 			},
 		},
+		&fakeRuntimeEventRepository{},
 		starter,
 	)
 	watchDone := make(chan struct{}, 1)
@@ -168,18 +175,21 @@ func TestRuntimeServiceWatchShardClearsStateOnUnexpectedExit(t *testing.T) {
 		t.Fatalf("Start() error = %v", err)
 	}
 
-	process.waitCh <- errors.New("exit 1")
+	first.waitCh <- errors.New("exit 1")
 	<-watchDone
 
 	status, err := service.Status(context.Background())
 	if err != nil {
 		t.Fatalf("Status() error = %v", err)
 	}
-	if status.Status != domain.ServerStatusStopped {
-		t.Fatalf("status = %q, want stopped", status.Status)
+	if status.Status != domain.ServerStatusRunning {
+		t.Fatalf("status = %q, want running", status.Status)
 	}
-	if status.LastError == "" {
-		t.Fatal("LastError = empty, want exit message")
+	if len(status.Shards) != 1 || status.Shards[0].PID != 202 {
+		t.Fatalf("shards = %#v, want restarted shard pid 202", status.Shards)
+	}
+	if status.LastError == "" || !strings.Contains(status.LastError, "restarted automatically") {
+		t.Fatalf("LastError = %q, want automatic restart message", status.LastError)
 	}
 }
 
@@ -198,6 +208,7 @@ func TestRuntimeServiceStatusReturnsRunningShards(t *testing.T) {
 				{Name: domain.ShardCaves, Enabled: true},
 			},
 		}},
+		&fakeRuntimeEventRepository{},
 		&fakeShardProcessStarter{},
 	)
 	service.processes[domain.ShardCaves] = fakeRuntimeProcess{pid: 202}
@@ -244,6 +255,7 @@ func TestRuntimeServiceStatusMarksRestartRequiredWhenConfigChanged(t *testing.T)
 			PauseWhenEmpty: true,
 			Shards:         []domain.ShardConfig{{Name: domain.ShardMaster, Enabled: true}},
 		}},
+		&fakeRuntimeEventRepository{},
 		&fakeShardProcessStarter{},
 	)
 	service.processes[domain.ShardMaster] = fakeRuntimeProcess{pid: 101}
@@ -285,6 +297,7 @@ func TestRuntimeServiceRestartRestartsShards(t *testing.T) {
 			PauseWhenEmpty: true,
 			Shards:         []domain.ShardConfig{{Name: domain.ShardMaster, Enabled: true}},
 		}},
+		&fakeRuntimeEventRepository{},
 		starter,
 	)
 	service.processes[domain.ShardMaster] = oldProcess
@@ -309,6 +322,7 @@ func TestRuntimeServiceStopKillsRunningShards(t *testing.T) {
 		domain.ManagedLayout{},
 		&fakeInstallationStateRepository{},
 		&fakeRuntimeClusterConfigRepository{},
+		&fakeRuntimeEventRepository{},
 		&fakeShardProcessStarter{},
 	)
 	service.processes[domain.ShardMaster] = master
@@ -332,6 +346,7 @@ func TestRuntimeServiceStopRejectsWhenNotRunning(t *testing.T) {
 		domain.ManagedLayout{},
 		&fakeInstallationStateRepository{},
 		&fakeRuntimeClusterConfigRepository{},
+		&fakeRuntimeEventRepository{},
 		&fakeShardProcessStarter{},
 	)
 
@@ -346,6 +361,10 @@ type fakeRuntimeClusterConfigRepository struct {
 	err    error
 }
 
+type fakeRuntimeEventRepository struct {
+	events []domain.RuntimeEvent
+}
+
 func (r *fakeRuntimeClusterConfigRepository) GetClusterConfig(context.Context) (domain.ClusterConfig, error) {
 	if r.err != nil {
 		return domain.ClusterConfig{}, r.err
@@ -357,10 +376,20 @@ func (r *fakeRuntimeClusterConfigRepository) SaveClusterConfig(context.Context, 
 	return nil
 }
 
+func (r *fakeRuntimeEventRepository) CreateRuntimeEvent(_ context.Context, event domain.RuntimeEvent) error {
+	r.events = append(r.events, event)
+	return nil
+}
+
+func (r *fakeRuntimeEventRepository) ListRuntimeEvents(context.Context, int) ([]domain.RuntimeEvent, error) {
+	return append([]domain.RuntimeEvent(nil), r.events...), nil
+}
+
 type fakeShardProcessStarter struct {
-	started   []domain.ShardName
-	processes map[domain.ShardName]command.Process
-	errs      map[domain.ShardName]error
+	started         []domain.ShardName
+	processes       map[domain.ShardName]command.Process
+	processSequence map[domain.ShardName][]command.Process
+	errs            map[domain.ShardName]error
 }
 
 func (s *fakeShardProcessStarter) StartShard(_ context.Context, _ domain.ManagedLayout, shard domain.ShardName) (command.Process, error) {
@@ -369,6 +398,11 @@ func (s *fakeShardProcessStarter) StartShard(_ context.Context, _ domain.Managed
 		return nil, err
 	}
 	if process := s.processes[shard]; process != nil {
+		return process, nil
+	}
+	if sequence := s.processSequence[shard]; len(sequence) > 0 {
+		process := sequence[0]
+		s.processSequence[shard] = sequence[1:]
 		return process, nil
 	}
 	return fakeRuntimeProcess{pid: 1}, nil

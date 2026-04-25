@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"slices"
 	"sync"
+	"time"
 
 	"dst-server-ctl/internal/adapter/command"
 	"dst-server-ctl/internal/domain"
@@ -19,14 +20,17 @@ type RuntimeService struct {
 	layout   domain.ManagedLayout
 	installs InstallationStateRepository
 	clusters ClusterConfigRepository
+	events   RuntimeEventRepository
 	starter  ShardProcessStarter
 
 	mu            sync.Mutex
 	processes     map[domain.ShardName]command.Process
 	cancels       map[domain.ShardName]context.CancelFunc
 	stopping      map[domain.ShardName]bool
+	retries       map[domain.ShardName]int
 	dispatch      func(func())
 	startedConfig *domain.ClusterConfig
+	now           func() time.Time
 	lastError     string
 }
 
@@ -34,19 +38,23 @@ func NewRuntimeService(
 	layout domain.ManagedLayout,
 	installs InstallationStateRepository,
 	clusters ClusterConfigRepository,
+	events RuntimeEventRepository,
 	starter ShardProcessStarter,
 ) *RuntimeService {
 	return &RuntimeService{
 		layout:    layout,
 		installs:  installs,
 		clusters:  clusters,
+		events:    events,
 		starter:   starter,
 		processes: make(map[domain.ShardName]command.Process),
 		cancels:   make(map[domain.ShardName]context.CancelFunc),
 		stopping:  make(map[domain.ShardName]bool),
+		retries:   make(map[domain.ShardName]int),
 		dispatch: func(fn func()) {
 			go fn()
 		},
+		now: time.Now,
 	}
 }
 
@@ -97,10 +105,8 @@ func (s *RuntimeService) startLocked(ctx context.Context) error {
 			continue
 		}
 
-		shardCtx, cancel := context.WithCancel(context.Background())
-		process, err := s.starter.StartShard(shardCtx, s.layout, shard.Name)
+		process, cancel, err := s.startShardLocked(shard.Name)
 		if err != nil {
-			cancel()
 			s.stopStartedLocked(started)
 			startErr := fmt.Errorf("start shard %s: %w", shard.Name, err)
 			s.lastError = startErr.Error()
@@ -110,8 +116,10 @@ func (s *RuntimeService) startLocked(ctx context.Context) error {
 		s.processes[shard.Name] = process
 		s.cancels[shard.Name] = cancel
 		s.stopping[shard.Name] = false
+		s.retries[shard.Name] = 0
 		started = append(started, shard.Name)
 		s.watchShard(shard.Name, process)
+		s.recordEventLocked(shard.Name, domain.RuntimeEventStarted, fmt.Sprintf("%s shard started with PID %d", shard.Name, process.PID()))
 	}
 
 	s.startedConfig = cloneClusterConfig(startedConfig)
@@ -173,6 +181,7 @@ func (s *RuntimeService) stopStartedLocked(shards []domain.ShardName) {
 	for i := len(shards) - 1; i >= 0; i-- {
 		shard := shards[i]
 		s.stopping[shard] = true
+		s.recordEventLocked(shard, domain.RuntimeEventStopped, fmt.Sprintf("%s shard stop requested", shard))
 		if cancel, ok := s.cancels[shard]; ok {
 			cancel()
 			delete(s.cancels, shard)
@@ -181,6 +190,7 @@ func (s *RuntimeService) stopStartedLocked(shards []domain.ShardName) {
 			_ = process.Kill()
 			delete(s.processes, shard)
 		}
+		delete(s.retries, shard)
 	}
 }
 
@@ -214,11 +224,42 @@ func (s *RuntimeService) watchShard(shard domain.ShardName, process command.Proc
 			return
 		}
 
+		s.recordEventLocked(shard, domain.RuntimeEventExited, fmt.Sprintf("%s shard exited unexpectedly: %v", shard, err))
+		if s.retries[shard] < 1 {
+			s.retries[shard]++
+			process, cancel, restartErr := s.startShardLocked(shard)
+			if restartErr == nil {
+				s.processes[shard] = process
+				s.cancels[shard] = cancel
+				s.stopping[shard] = false
+				s.recordEventLocked(shard, domain.RuntimeEventRetried, fmt.Sprintf("%s shard auto-restarted with PID %d", shard, process.PID()))
+				s.lastError = fmt.Sprintf("shard %s exited and was restarted automatically", shard)
+				s.watchShard(shard, process)
+				return
+			}
+			s.recordEventLocked(shard, domain.RuntimeEventRetried, fmt.Sprintf("%s shard auto-restart failed: %v", shard, restartErr))
+			s.lastError = fmt.Sprintf("shard %s exited and auto-restart failed: %v", shard, restartErr)
+			if len(s.processes) == 0 {
+				s.startedConfig = nil
+			}
+			return
+		}
+
 		if len(s.processes) == 0 {
 			s.startedConfig = nil
 		}
 		s.lastError = fmt.Sprintf("shard %s exited: %v", shard, err)
 	})
+}
+
+func (s *RuntimeService) startShardLocked(shard domain.ShardName) (command.Process, context.CancelFunc, error) {
+	shardCtx, cancel := context.WithCancel(context.Background())
+	process, err := s.starter.StartShard(shardCtx, s.layout, shard)
+	if err != nil {
+		cancel()
+		return nil, nil, err
+	}
+	return process, cancel, nil
 }
 
 func clusterConfigsEqual(a, b *domain.ClusterConfig) bool {
@@ -247,4 +288,16 @@ func cloneClusterConfig(config domain.ClusterConfig) *domain.ClusterConfig {
 	cloned := config
 	cloned.Shards = append([]domain.ShardConfig(nil), config.Shards...)
 	return &cloned
+}
+
+func (s *RuntimeService) recordEventLocked(shard domain.ShardName, kind domain.RuntimeEventKind, detail string) {
+	if s.events == nil {
+		return
+	}
+	_ = s.events.CreateRuntimeEvent(context.Background(), domain.RuntimeEvent{
+		Shard:     shard,
+		Kind:      kind,
+		Detail:    detail,
+		CreatedAt: s.now().UTC(),
+	})
 }

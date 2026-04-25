@@ -67,6 +67,20 @@ CREATE TABLE cluster_shards (
 	enabled INTEGER NOT NULL
 );`,
 	},
+	{
+		Version: 4,
+		Name:    "create_runtime_events",
+		SQL: `
+CREATE TABLE runtime_events (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	shard TEXT NOT NULL,
+	kind TEXT NOT NULL,
+	detail TEXT NOT NULL,
+	created_at TEXT NOT NULL
+);
+
+CREATE INDEX runtime_events_created_at_idx ON runtime_events(created_at DESC, id DESC);`,
+	},
 }
 
 func Migrate(ctx context.Context, db *sql.DB) error {

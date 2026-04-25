@@ -305,6 +305,61 @@ WHERE id = ?`,
 	return nil
 }
 
+func (s *Store) CreateRuntimeEvent(ctx context.Context, event domain.RuntimeEvent) error {
+	row := runtimeEventRowFromDomain(event)
+	_, err := s.db.ExecContext(ctx, `
+INSERT INTO runtime_events (
+	shard,
+	kind,
+	detail,
+	created_at
+) VALUES (?, ?, ?, ?)`,
+		row.Shard,
+		row.Kind,
+		row.Detail,
+		row.CreatedAt,
+	)
+	if err != nil {
+		return fmt.Errorf("create runtime event: %w", err)
+	}
+
+	return nil
+}
+
+func (s *Store) ListRuntimeEvents(ctx context.Context, limit int) ([]domain.RuntimeEvent, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+
+	rows, err := s.db.QueryContext(ctx, `
+SELECT id, shard, kind, detail, created_at
+FROM runtime_events
+ORDER BY created_at DESC, id DESC
+LIMIT ?`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list runtime events: %w", err)
+	}
+	defer rows.Close()
+
+	var events []domain.RuntimeEvent
+	for rows.Next() {
+		row, err := scanRuntimeEventRow(rows)
+		if err != nil {
+			return nil, err
+		}
+		event, err := row.toDomain()
+		if err != nil {
+			return nil, err
+		}
+		events = append(events, event)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate runtime events: %w", err)
+	}
+
+	return events, nil
+}
+
 func (s *Store) getTaskRow(ctx context.Context, query string, args ...any) (taskRow, error) {
 	row := s.db.QueryRowContext(ctx, query, args...)
 	task, err := scanTaskRow(row)
@@ -500,6 +555,14 @@ type taskRow struct {
 	UpdatedAt  string
 }
 
+type runtimeEventRow struct {
+	ID        int64
+	Shard     string
+	Kind      string
+	Detail    string
+	CreatedAt string
+}
+
 type rowScanner interface {
 	Scan(dest ...any) error
 }
@@ -518,6 +581,20 @@ func scanTaskRow(scanner rowScanner) (taskRow, error) {
 		&row.UpdatedAt,
 	); err != nil {
 		return taskRow{}, err
+	}
+	return row, nil
+}
+
+func scanRuntimeEventRow(scanner rowScanner) (runtimeEventRow, error) {
+	var row runtimeEventRow
+	if err := scanner.Scan(
+		&row.ID,
+		&row.Shard,
+		&row.Kind,
+		&row.Detail,
+		&row.CreatedAt,
+	); err != nil {
+		return runtimeEventRow{}, err
 	}
 	return row, nil
 }
@@ -564,5 +641,30 @@ func (r taskRow) toDomain() (domain.Task, error) {
 		FinishedAt: finishedAt,
 		CreatedAt:  createdAt,
 		UpdatedAt:  updatedAt,
+	}, nil
+}
+
+func runtimeEventRowFromDomain(event domain.RuntimeEvent) runtimeEventRow {
+	return runtimeEventRow{
+		ID:        event.ID,
+		Shard:     string(event.Shard),
+		Kind:      string(event.Kind),
+		Detail:    event.Detail,
+		CreatedAt: event.CreatedAt.UTC().Format(timeFormat),
+	}
+}
+
+func (r runtimeEventRow) toDomain() (domain.RuntimeEvent, error) {
+	createdAt, err := parseRequiredTime("created_at", r.CreatedAt)
+	if err != nil {
+		return domain.RuntimeEvent{}, err
+	}
+
+	return domain.RuntimeEvent{
+		ID:        r.ID,
+		Shard:     domain.ShardName(r.Shard),
+		Kind:      domain.RuntimeEventKind(r.Kind),
+		Detail:    r.Detail,
+		CreatedAt: createdAt,
 	}, nil
 }
