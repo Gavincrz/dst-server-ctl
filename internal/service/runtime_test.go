@@ -187,11 +187,32 @@ func TestRuntimeServiceStatusReturnsRunningShards(t *testing.T) {
 	service := NewRuntimeService(
 		domain.ManagedLayout{},
 		&fakeInstallationStateRepository{},
-		&fakeRuntimeClusterConfigRepository{},
+		&fakeRuntimeClusterConfigRepository{config: domain.ClusterConfig{
+			ClusterName:    "DST Server",
+			GameMode:       "survival",
+			MaxPlayers:     6,
+			Language:       "en",
+			PauseWhenEmpty: true,
+			Shards: []domain.ShardConfig{
+				{Name: domain.ShardMaster, Enabled: true},
+				{Name: domain.ShardCaves, Enabled: true},
+			},
+		}},
 		&fakeShardProcessStarter{},
 	)
 	service.processes[domain.ShardCaves] = fakeRuntimeProcess{pid: 202}
 	service.processes[domain.ShardMaster] = fakeRuntimeProcess{pid: 101}
+	service.startedConfig = &domain.ClusterConfig{
+		ClusterName:    "DST Server",
+		GameMode:       "survival",
+		MaxPlayers:     6,
+		Language:       "en",
+		PauseWhenEmpty: true,
+		Shards: []domain.ShardConfig{
+			{Name: domain.ShardMaster, Enabled: true},
+			{Name: domain.ShardCaves, Enabled: true},
+		},
+	}
 
 	status, err := service.Status(context.Background())
 	if err != nil {
@@ -205,6 +226,79 @@ func TestRuntimeServiceStatusReturnsRunningShards(t *testing.T) {
 	}
 	if status.Shards[0].Name != domain.ShardMaster || status.Shards[0].PID != 101 {
 		t.Fatalf("first shard = %#v, want master pid 101", status.Shards[0])
+	}
+	if status.RestartRequired {
+		t.Fatal("RestartRequired = true, want false")
+	}
+}
+
+func TestRuntimeServiceStatusMarksRestartRequiredWhenConfigChanged(t *testing.T) {
+	service := NewRuntimeService(
+		domain.ManagedLayout{},
+		&fakeInstallationStateRepository{},
+		&fakeRuntimeClusterConfigRepository{config: domain.ClusterConfig{
+			ClusterName:    "Changed",
+			GameMode:       "survival",
+			MaxPlayers:     6,
+			Language:       "en",
+			PauseWhenEmpty: true,
+			Shards:         []domain.ShardConfig{{Name: domain.ShardMaster, Enabled: true}},
+		}},
+		&fakeShardProcessStarter{},
+	)
+	service.processes[domain.ShardMaster] = fakeRuntimeProcess{pid: 101}
+	service.startedConfig = &domain.ClusterConfig{
+		ClusterName:    "Original",
+		GameMode:       "survival",
+		MaxPlayers:     6,
+		Language:       "en",
+		PauseWhenEmpty: true,
+		Shards:         []domain.ShardConfig{{Name: domain.ShardMaster, Enabled: true}},
+	}
+
+	status, err := service.Status(context.Background())
+	if err != nil {
+		t.Fatalf("Status() error = %v", err)
+	}
+	if !status.RestartRequired {
+		t.Fatal("RestartRequired = false, want true")
+	}
+}
+
+func TestRuntimeServiceRestartRestartsShards(t *testing.T) {
+	now := time.Date(2026, 4, 24, 14, 0, 0, 0, time.UTC)
+	oldProcess := &trackedRuntimeProcess{pid: 10}
+	newProcess := &controlledRuntimeProcess{pid: 20, waitCh: make(chan error, 1)}
+	starter := &fakeShardProcessStarter{
+		processes: map[domain.ShardName]command.Process{
+			domain.ShardMaster: newProcess,
+		},
+	}
+	service := NewRuntimeService(
+		domain.ManagedLayout{},
+		&fakeInstallationStateRepository{state: domain.InstallationState{ManagedRoot: "/srv/managed", DSTInstalledAt: &now}},
+		&fakeRuntimeClusterConfigRepository{config: domain.ClusterConfig{
+			ClusterName:    "DST Server",
+			GameMode:       "survival",
+			MaxPlayers:     6,
+			Language:       "en",
+			PauseWhenEmpty: true,
+			Shards:         []domain.ShardConfig{{Name: domain.ShardMaster, Enabled: true}},
+		}},
+		starter,
+	)
+	service.processes[domain.ShardMaster] = oldProcess
+	service.cancels[domain.ShardMaster] = func() {}
+	service.dispatch = func(fn func()) {}
+
+	if err := service.Restart(context.Background()); err != nil {
+		t.Fatalf("Restart() error = %v", err)
+	}
+	if !oldProcess.killed {
+		t.Fatal("old process not killed during restart")
+	}
+	if service.processes[domain.ShardMaster] != newProcess {
+		t.Fatalf("new process = %#v, want restarted process", service.processes[domain.ShardMaster])
 	}
 }
 

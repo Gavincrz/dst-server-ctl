@@ -46,6 +46,7 @@
   type RuntimeStatus = {
     status: string;
     shards: RuntimeShardStatus[];
+    restartRequired: boolean;
     lastError?: string;
   };
 
@@ -221,6 +222,10 @@
       return runtimeRunning(status) ? 'Start Server' : 'Starting';
     }
     return 'Start Server';
+  }
+
+  function canRestartRuntime(status: RuntimeStatus | null, install: InstallationStatus | null) {
+    return !!install?.dstInstalled && !runtimeSubmitting;
   }
 
   function canStartRuntime(status: RuntimeStatus | null, install: InstallationStatus | null) {
@@ -469,6 +474,36 @@
     }
   }
 
+  async function restartRuntime() {
+    runtimeSubmitting = true;
+    runtimeError = '';
+    runtimeMessage = '';
+
+    try {
+      const response = await fetch('/api/v1/runtime/restart', { method: 'POST' });
+      if (!response.ok) {
+        let message = `Runtime restart returned HTTP ${response.status}`;
+        try {
+          const payload = (await response.json()) as { error?: string };
+          if (payload.error) {
+            message = payload.error;
+          }
+        } catch {
+          // Ignore JSON parse failures and keep the status-based message.
+        }
+        throw new Error(message);
+      }
+
+      runtime = (await response.json()) as RuntimeStatus;
+      runtimeMessage = 'Managed shard processes were restarted with the latest cluster configuration.';
+      refreshedAt = new Date();
+    } catch (err) {
+      runtimeError = err instanceof Error ? err.message : 'Runtime restart failed';
+    } finally {
+      runtimeSubmitting = false;
+    }
+  }
+
   onMount(() => {
     let pollTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -580,6 +615,9 @@
         <button type="button" disabled={!canStopRuntime(runtime) || runtimeSubmitting} on:click={stopRuntime}>
           {runtimeSubmitting && runtimeRunning(runtime) ? 'Stopping' : 'Stop Server'}
         </button>
+        <button type="button" disabled={!canRestartRuntime(runtime, installation)} on:click={restartRuntime}>
+          {runtimeSubmitting ? 'Restarting' : 'Restart Server'}
+        </button>
         <button type="button" class="secondary-action" disabled={!canStartRuntime(runtime, installation) || runtimeSubmitting} on:click={startRuntime}>
           {runtimeActionLabel(runtime)}
         </button>
@@ -602,6 +640,9 @@
               Start the managed server to launch enabled shards from the current cluster configuration.
             {/if}
           </p>
+          {#if runtime?.restartRequired}
+            <p class="task-error">Cluster configuration changed since the current shard processes were started. Restart is required to apply it.</p>
+          {/if}
           {#if runtime?.lastError}
             <p class="task-error">{runtime.lastError}</p>
           {/if}

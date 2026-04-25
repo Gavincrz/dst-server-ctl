@@ -302,7 +302,8 @@ func TestRuntimeStatusEndpoint(t *testing.T) {
 		InstallTasks: fakeInstallationTaskService{},
 		Runtime: fakeRuntimeService{
 			status: domain.RuntimeStatus{
-				Status: domain.ServerStatusRunning,
+				Status:          domain.ServerStatusRunning,
+				RestartRequired: true,
 				Shards: []domain.ShardState{
 					{Name: domain.ShardMaster, Running: true, PID: 101},
 				},
@@ -324,6 +325,9 @@ func TestRuntimeStatusEndpoint(t *testing.T) {
 	}
 	if payload.Status != "running" {
 		t.Fatalf("status = %q, want running", payload.Status)
+	}
+	if !payload.RestartRequired {
+		t.Fatal("RestartRequired = false, want true")
 	}
 	if len(payload.Shards) != 1 || payload.Shards[0].PID != 101 {
 		t.Fatalf("shards = %#v, want master pid 101", payload.Shards)
@@ -386,6 +390,26 @@ func TestRuntimeStopEndpoint(t *testing.T) {
 
 	if response.Code != nethttp.StatusOK {
 		t.Fatalf("status = %d, want %d", response.Code, nethttp.StatusOK)
+	}
+}
+
+func TestRuntimeRestartEndpoint(t *testing.T) {
+	router := NewRouter(testLogger(), Services{
+		Status:       fakeStatusReader{},
+		Installation: fakeInstallationStatusReader{},
+		Cluster:      fakeClusterConfigService{},
+		InstallTasks: fakeInstallationTaskService{},
+		Runtime: fakeRuntimeService{
+			status: domain.RuntimeStatus{Status: domain.ServerStatusRunning},
+		},
+	})
+
+	request := httptest.NewRequest(nethttp.MethodPost, "/api/v1/runtime/restart", nil)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	if response.Code != nethttp.StatusAccepted {
+		t.Fatalf("status = %d, want %d", response.Code, nethttp.StatusAccepted)
 	}
 }
 
@@ -452,10 +476,11 @@ type fakeClusterConfigService struct {
 }
 
 type fakeRuntimeService struct {
-	status    domain.RuntimeStatus
-	statusErr error
-	startErr  error
-	stopErr   error
+	status     domain.RuntimeStatus
+	statusErr  error
+	startErr   error
+	restartErr error
+	stopErr    error
 }
 
 type fakeRuntimeLogService struct {
@@ -504,6 +529,10 @@ func (s fakeRuntimeService) Start(context.Context) error {
 
 func (s fakeRuntimeService) Stop(context.Context) error {
 	return s.stopErr
+}
+
+func (s fakeRuntimeService) Restart(context.Context) error {
+	return s.restartErr
 }
 
 func (s fakeRuntimeLogService) Get(context.Context, domain.ShardName, int) ([]string, error) {

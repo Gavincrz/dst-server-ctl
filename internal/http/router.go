@@ -43,6 +43,7 @@ type ClusterConfigManager interface {
 type RuntimeService interface {
 	Status(ctx context.Context) (domain.RuntimeStatus, error)
 	Start(ctx context.Context) error
+	Restart(ctx context.Context) error
 	Stop(ctx context.Context) error
 }
 
@@ -201,6 +202,29 @@ func NewRouter(logger *slog.Logger, services Services) http.Handler {
 		respondJSON(w, runtimeResponseFromDomain(status))
 	})
 
+	mux.HandleFunc("POST /api/v1/runtime/restart", func(w http.ResponseWriter, r *http.Request) {
+		err := services.Runtime.Restart(r.Context())
+		switch {
+		case errors.Is(err, domain.ErrDSTNotInstalled):
+			respondError(w, http.StatusConflict, "dst is not installed")
+			return
+		case err != nil:
+			logger.Error("runtime restart failed", "error", err)
+			respondError(w, http.StatusInternalServerError, "runtime restart failed")
+			return
+		}
+
+		status, err := services.Runtime.Status(r.Context())
+		if err != nil {
+			logger.Error("runtime status after restart failed", "error", err)
+			respondError(w, http.StatusInternalServerError, "runtime status unavailable")
+			return
+		}
+
+		w.WriteHeader(http.StatusAccepted)
+		respondJSON(w, runtimeResponseFromDomain(status))
+	})
+
 	mux.HandleFunc("GET /api/v1/runtime/logs", func(w http.ResponseWriter, r *http.Request) {
 		shard := domain.ShardName(r.URL.Query().Get("shard"))
 		lines := 200
@@ -295,9 +319,10 @@ type shardResponse struct {
 }
 
 type runtimeResponse struct {
-	Status    string               `json:"status"`
-	Shards    []runtimeShardStatus `json:"shards"`
-	LastError string               `json:"lastError,omitempty"`
+	Status          string               `json:"status"`
+	Shards          []runtimeShardStatus `json:"shards"`
+	RestartRequired bool                 `json:"restartRequired"`
+	LastError       string               `json:"lastError,omitempty"`
 }
 
 type runtimeShardStatus struct {
@@ -389,9 +414,10 @@ func runtimeResponseFromDomain(status domain.RuntimeStatus) runtimeResponse {
 	}
 
 	return runtimeResponse{
-		Status:    string(status.Status),
-		Shards:    shards,
-		LastError: status.LastError,
+		Status:          string(status.Status),
+		Shards:          shards,
+		RestartRequired: status.RestartRequired,
+		LastError:       status.LastError,
 	}
 }
 

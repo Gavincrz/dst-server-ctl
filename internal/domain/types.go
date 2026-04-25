@@ -47,9 +47,10 @@ type Status struct {
 }
 
 type RuntimeStatus struct {
-	Status    ServerStatus `json:"status"`
-	Shards    []ShardState `json:"shards"`
-	LastError string       `json:"lastError,omitempty"`
+	Status          ServerStatus `json:"status"`
+	Shards          []ShardState `json:"shards"`
+	RestartRequired bool         `json:"restartRequired"`
+	LastError       string       `json:"lastError,omitempty"`
 }
 
 type ShardState struct {

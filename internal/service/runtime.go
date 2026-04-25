@@ -21,12 +21,13 @@ type RuntimeService struct {
 	clusters ClusterConfigRepository
 	starter  ShardProcessStarter
 
-	mu        sync.Mutex
-	processes map[domain.ShardName]command.Process
-	cancels   map[domain.ShardName]context.CancelFunc
-	stopping  map[domain.ShardName]bool
-	dispatch  func(func())
-	lastError string
+	mu            sync.Mutex
+	processes     map[domain.ShardName]command.Process
+	cancels       map[domain.ShardName]context.CancelFunc
+	stopping      map[domain.ShardName]bool
+	dispatch      func(func())
+	startedConfig *domain.ClusterConfig
+	lastError     string
 }
 
 func NewRuntimeService(
@@ -53,6 +54,22 @@ func (s *RuntimeService) Start(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	return s.startLocked(ctx)
+}
+
+func (s *RuntimeService) Restart(ctx context.Context) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if len(s.processes) > 0 {
+		s.stopStartedLocked(s.runningShardsLocked())
+	}
+
+	return s.startLocked(ctx)
+}
+
+func (s *RuntimeService) startLocked(ctx context.Context) error {
+
 	if len(s.processes) > 0 {
 		return domain.ErrServerAlreadyRunning
 	}
@@ -73,6 +90,7 @@ func (s *RuntimeService) Start(ctx context.Context) error {
 		return err
 	}
 
+	startedConfig := config
 	started := make([]domain.ShardName, 0, len(config.Shards))
 	for _, shard := range config.Shards {
 		if !shard.Enabled {
@@ -96,6 +114,7 @@ func (s *RuntimeService) Start(ctx context.Context) error {
 		s.watchShard(shard.Name, process)
 	}
 
+	s.startedConfig = cloneClusterConfig(startedConfig)
 	s.lastError = ""
 	return nil
 }
@@ -109,11 +128,12 @@ func (s *RuntimeService) Stop(context.Context) error {
 	}
 
 	s.stopStartedLocked(s.runningShardsLocked())
+	s.startedConfig = nil
 	s.lastError = ""
 	return nil
 }
 
-func (s *RuntimeService) Status(context.Context) (domain.RuntimeStatus, error) {
+func (s *RuntimeService) Status(ctx context.Context) (domain.RuntimeStatus, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -132,10 +152,20 @@ func (s *RuntimeService) Status(context.Context) (domain.RuntimeStatus, error) {
 		status = domain.ServerStatusRunning
 	}
 
+	restartRequired := false
+	if len(shards) > 0 {
+		config, err := s.clusters.GetClusterConfig(ctx)
+		if err != nil {
+			return domain.RuntimeStatus{}, err
+		}
+		restartRequired = !clusterConfigsEqual(s.startedConfig, &config)
+	}
+
 	return domain.RuntimeStatus{
-		Status:    status,
-		Shards:    shards,
-		LastError: s.lastError,
+		Status:          status,
+		Shards:          shards,
+		RestartRequired: restartRequired,
+		LastError:       s.lastError,
 	}, nil
 }
 
@@ -184,6 +214,37 @@ func (s *RuntimeService) watchShard(shard domain.ShardName, process command.Proc
 			return
 		}
 
+		if len(s.processes) == 0 {
+			s.startedConfig = nil
+		}
 		s.lastError = fmt.Sprintf("shard %s exited: %v", shard, err)
 	})
+}
+
+func clusterConfigsEqual(a, b *domain.ClusterConfig) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	if a.ClusterName != b.ClusterName ||
+		a.ClusterDescription != b.ClusterDescription ||
+		a.GameMode != b.GameMode ||
+		a.MaxPlayers != b.MaxPlayers ||
+		a.Language != b.Language ||
+		a.PVP != b.PVP ||
+		a.PauseWhenEmpty != b.PauseWhenEmpty ||
+		len(a.Shards) != len(b.Shards) {
+		return false
+	}
+	for i := range a.Shards {
+		if a.Shards[i] != b.Shards[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func cloneClusterConfig(config domain.ClusterConfig) *domain.ClusterConfig {
+	cloned := config
+	cloned.Shards = append([]domain.ShardConfig(nil), config.Shards...)
+	return &cloned
 }
