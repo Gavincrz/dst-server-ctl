@@ -20,16 +20,18 @@
 - [x] 把 cluster 配置 API 接入 Web UI 表单和保存流程。
 - [x] 为受管 DST 启动流程接入生成后的 cluster 配置目录和 shard 布局。
 - [x] 在启动流程接通后补充运行态状态页和基础进程控制入口。
+- [x] 为 Master 和 Caves 补充日志流读取与展示。
+- [x] 为运行中进程补充退出状态跟踪、自动清理和更细的错误呈现。
 
-当前项目已有 harness、工程骨架、managed root 路径布局、共享 command runner、SQLite 状态存储基础层、启动时 managed root 初始化、安装状态 API、安装任务 API、任务模型、由任务驱动的 SteamCMD/DST 安装执行流程、初始化状态页、可反映控制器启动时间的基础运行状态、受管 cluster 的结构化配置状态和 `GET/PUT /api/v1/cluster` 读写 API、由该状态生成的基础 `cluster.ini` 与 shard `server.ini` 文件输出、接入 Web UI 的 cluster 配置表单/保存/重置和前端测试、基于 managed root `clusters/primary` 布局的 DST shard 启动命令生成与运行时启动 service，以及 `GET /api/v1/runtime`、`POST /api/v1/runtime/start`、`POST /api/v1/runtime/stop` 与对应的运行态 Web 控制面板。
+当前项目已有 harness、工程骨架、managed root 路径布局、共享 command runner、SQLite 状态存储基础层、启动时 managed root 初始化、安装状态 API、安装任务 API、任务模型、由任务驱动的 SteamCMD/DST 安装执行流程、初始化状态页、可反映控制器启动时间的基础运行状态、受管 cluster 的结构化配置状态和 `GET/PUT /api/v1/cluster` 读写 API、由该状态生成的基础 `cluster.ini` 与 shard `server.ini` 文件输出、接入 Web UI 的 cluster 配置表单/保存/重置和前端测试、基于 managed root `clusters/primary` 布局的 DST shard 启动命令生成与运行时启动 service、`GET /api/v1/runtime`、`POST /api/v1/runtime/start`、`POST /api/v1/runtime/stop` 与对应的运行态 Web 控制面板、写入 `logs/master.log`/`logs/caves.log` 的 shard 日志落盘、最近日志读取 API 和日志展示面板，以及 shard 异常退出后的自动状态清理与错误回传。
 
 ## 下一任务
 
-- [ ] 为 Master 和 Caves 补充日志流读取与展示。
+- [ ] 在运行态稳定后补充重启入口，并区分配置变更是否需要重启。
 
 ## 后续任务
 
-- [ ] 为运行中进程补充退出状态跟踪、自动清理和更细的错误呈现。
+- [ ] 持久化更细的运行历史，并为意外退出补重试/告警策略。
 
 ## 暂时不要做
 
@@ -50,4 +52,5 @@
 
 - 第一版公开发布时，`leveldataoverride.lua` 要做到多完整的可视化。
 - 启动流程接入后，cluster 配置变更与运行中 shard 的重载策略要不要区分“需重启”与“即时生效”。
-- 当前 runtime service 已有基础 start/stop/status，但尚未处理 shard 异常退出后的自动状态收敛和日志串流。
+- 当前日志展示是按轮询读取最近日志行，不是 SSE/WebSocket 持续推流；如果后续要减少延迟和重复传输，可以再换成真正流式方案。
+- 当前退出状态跟踪只覆盖控制器进程存活期间的 shard 生命周期，还没有把运行历史持久化进 SQLite。

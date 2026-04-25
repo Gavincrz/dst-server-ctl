@@ -115,3 +115,7 @@ func (r *fakeRunner) Run(_ context.Context, name string, args ...string) (comman
 func (r *fakeRunner) Start(context.Context, string, ...string) (command.Process, error) {
 	return nil, nil
 }
+
+func (r *fakeRunner) StartWithOptions(context.Context, command.StartOptions, string, ...string) (command.Process, error) {
+	return nil, nil
+}

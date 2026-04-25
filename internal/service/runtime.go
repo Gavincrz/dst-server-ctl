@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"sync"
@@ -23,6 +24,8 @@ type RuntimeService struct {
 	mu        sync.Mutex
 	processes map[domain.ShardName]command.Process
 	cancels   map[domain.ShardName]context.CancelFunc
+	stopping  map[domain.ShardName]bool
+	dispatch  func(func())
 	lastError string
 }
 
@@ -39,6 +42,10 @@ func NewRuntimeService(
 		starter:   starter,
 		processes: make(map[domain.ShardName]command.Process),
 		cancels:   make(map[domain.ShardName]context.CancelFunc),
+		stopping:  make(map[domain.ShardName]bool),
+		dispatch: func(fn func()) {
+			go fn()
+		},
 	}
 }
 
@@ -84,7 +91,9 @@ func (s *RuntimeService) Start(ctx context.Context) error {
 
 		s.processes[shard.Name] = process
 		s.cancels[shard.Name] = cancel
+		s.stopping[shard.Name] = false
 		started = append(started, shard.Name)
+		s.watchShard(shard.Name, process)
 	}
 
 	s.lastError = ""
@@ -133,6 +142,7 @@ func (s *RuntimeService) Status(context.Context) (domain.RuntimeStatus, error) {
 func (s *RuntimeService) stopStartedLocked(shards []domain.ShardName) {
 	for i := len(shards) - 1; i >= 0; i-- {
 		shard := shards[i]
+		s.stopping[shard] = true
 		if cancel, ok := s.cancels[shard]; ok {
 			cancel()
 			delete(s.cancels, shard)
@@ -151,4 +161,29 @@ func (s *RuntimeService) runningShardsLocked() []domain.ShardName {
 	}
 	slices.SortFunc(shards, compareShardName)
 	return shards
+}
+
+func (s *RuntimeService) watchShard(shard domain.ShardName, process command.Process) {
+	s.dispatch(func() {
+		err := process.Wait()
+
+		s.mu.Lock()
+		defer s.mu.Unlock()
+
+		current, ok := s.processes[shard]
+		if !ok || current != process {
+			return
+		}
+
+		intentional := s.stopping[shard]
+		delete(s.processes, shard)
+		delete(s.cancels, shard)
+		delete(s.stopping, shard)
+
+		if intentional || err == nil || errors.Is(err, context.Canceled) {
+			return
+		}
+
+		s.lastError = fmt.Sprintf("shard %s exited: %v", shard, err)
+	})
 }

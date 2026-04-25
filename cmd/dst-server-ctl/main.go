@@ -13,6 +13,7 @@ import (
 	"dst-server-ctl/internal/adapter/command"
 	"dst-server-ctl/internal/adapter/dstconfig"
 	"dst-server-ctl/internal/adapter/dstserver"
+	"dst-server-ctl/internal/adapter/logtail"
 	"dst-server-ctl/internal/adapter/paths"
 	"dst-server-ctl/internal/adapter/sqlite"
 	"dst-server-ctl/internal/adapter/steamcmd"
@@ -65,6 +66,7 @@ func main() {
 		store,
 		dstserver.NewClient(command.ExecRunner{}),
 	)
+	runtimeLogService := service.NewRuntimeLogService(layout, logtail.Reader{})
 
 	server := &http.Server{
 		Addr: "127.0.0.1:8737",
@@ -74,6 +76,7 @@ func main() {
 			Cluster:      clusterService,
 			InstallTasks: installRunnerService,
 			Runtime:      runtimeService,
+			RuntimeLogs:  runtimeLogService,
 		}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}

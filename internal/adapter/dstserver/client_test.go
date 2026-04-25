@@ -16,6 +16,7 @@ func TestClientStartShardUsesProcessRunner(t *testing.T) {
 
 	process, err := client.StartShard(context.Background(), domain.ManagedLayout{
 		Root: "/srv/managed",
+		Logs: "/srv/managed/logs",
 		DST:  "/srv/managed/dst",
 	}, domain.ShardMaster)
 	if err != nil {
@@ -42,6 +43,12 @@ func TestClientStartShardUsesProcessRunner(t *testing.T) {
 	if !reflect.DeepEqual(runner.calls[0].args, wantArgs) {
 		t.Fatalf("args = %#v, want %#v", runner.calls[0].args, wantArgs)
 	}
+	if runner.calls[0].options.StdoutPath != "/srv/managed/logs/master.log" {
+		t.Fatalf("stdout path = %q, want /srv/managed/logs/master.log", runner.calls[0].options.StdoutPath)
+	}
+	if runner.calls[0].options.StderrPath != "/srv/managed/logs/master.log" {
+		t.Fatalf("stderr path = %q, want /srv/managed/logs/master.log", runner.calls[0].options.StderrPath)
+	}
 }
 
 func TestClientStartShardReturnsRunnerError(t *testing.T) {
@@ -56,8 +63,9 @@ func TestClientStartShardReturnsRunnerError(t *testing.T) {
 }
 
 type fakeRunnerCall struct {
-	name string
-	args []string
+	name    string
+	args    []string
+	options command.StartOptions
 }
 
 type fakeRunner struct {
@@ -71,7 +79,11 @@ func (r *fakeRunner) Run(context.Context, string, ...string) (command.Result, er
 }
 
 func (r *fakeRunner) Start(_ context.Context, name string, args ...string) (command.Process, error) {
-	r.calls = append(r.calls, fakeRunnerCall{name: name, args: args})
+	return r.StartWithOptions(context.Background(), command.StartOptions{}, name, args...)
+}
+
+func (r *fakeRunner) StartWithOptions(_ context.Context, options command.StartOptions, name string, args ...string) (command.Process, error) {
+	r.calls = append(r.calls, fakeRunnerCall{name: name, args: args, options: options})
 	if r.err != nil {
 		return nil, r.err
 	}

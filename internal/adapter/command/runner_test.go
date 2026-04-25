@@ -1,8 +1,11 @@
 package command
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -42,5 +45,40 @@ func TestExecRunnerStartPassesArgumentsWithoutShellExpansion(t *testing.T) {
 	}
 	if err := process.Wait(); err != nil {
 		t.Fatalf("Wait() error = %v", err)
+	}
+}
+
+func TestExecRunnerStartWithOptionsWritesLogsToFiles(t *testing.T) {
+	root := t.TempDir()
+	stdoutPath := filepath.Join(root, "stdout.log")
+	stderrPath := filepath.Join(root, "stderr.log")
+
+	process, err := ExecRunner{}.StartWithOptions(
+		context.Background(),
+		StartOptions{StdoutPath: stdoutPath, StderrPath: stderrPath},
+		"sh",
+		"-c",
+		"printf 'out'; printf 'err' >&2",
+	)
+	if err != nil {
+		t.Fatalf("StartWithOptions() error = %v", err)
+	}
+	if err := process.Wait(); err != nil {
+		t.Fatalf("Wait() error = %v", err)
+	}
+
+	stdout, err := os.ReadFile(stdoutPath)
+	if err != nil {
+		t.Fatalf("ReadFile(stdout) error = %v", err)
+	}
+	stderr, err := os.ReadFile(stderrPath)
+	if err != nil {
+		t.Fatalf("ReadFile(stderr) error = %v", err)
+	}
+	if !bytes.Equal(stdout, []byte("out")) {
+		t.Fatalf("stdout = %q, want out", string(stdout))
+	}
+	if !bytes.Equal(stderr, []byte("err")) {
+		t.Fatalf("stderr = %q, want err", string(stderr))
 	}
 }

@@ -3,7 +3,9 @@ package command
 import (
 	"context"
 	"errors"
+	"os"
 	"os/exec"
+	"path/filepath"
 )
 
 var ErrEmptyCommand = errors.New("empty command")
@@ -19,9 +21,15 @@ type Process interface {
 	Kill() error
 }
 
+type StartOptions struct {
+	StdoutPath string
+	StderrPath string
+}
+
 type Runner interface {
 	Run(ctx context.Context, name string, args ...string) (Result, error)
 	Start(ctx context.Context, name string, args ...string) (Process, error)
+	StartWithOptions(ctx context.Context, options StartOptions, name string, args ...string) (Process, error)
 }
 
 type ExecRunner struct{}
@@ -50,16 +58,48 @@ func (ExecRunner) Run(ctx context.Context, name string, args ...string) (Result,
 }
 
 func (ExecRunner) Start(ctx context.Context, name string, args ...string) (Process, error) {
+	return ExecRunner{}.StartWithOptions(ctx, StartOptions{}, name, args...)
+}
+
+func (ExecRunner) StartWithOptions(ctx context.Context, options StartOptions, name string, args ...string) (Process, error) {
 	if name == "" {
 		return nil, ErrEmptyCommand
 	}
 
 	cmd := exec.CommandContext(ctx, name, args...)
+	if err := applyStartOptions(cmd, options); err != nil {
+		return nil, err
+	}
 	if err := cmd.Start(); err != nil {
 		return nil, err
 	}
 
 	return execProcess{cmd: cmd}, nil
+}
+
+func applyStartOptions(cmd *exec.Cmd, options StartOptions) error {
+	if options.StdoutPath != "" {
+		file, err := openLogFile(options.StdoutPath)
+		if err != nil {
+			return err
+		}
+		cmd.Stdout = file
+	}
+	if options.StderrPath != "" {
+		file, err := openLogFile(options.StderrPath)
+		if err != nil {
+			return err
+		}
+		cmd.Stderr = file
+	}
+	return nil
+}
+
+func openLogFile(path string) (*os.File, error) {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return nil, err
+	}
+	return os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
 }
 
 type execProcess struct {

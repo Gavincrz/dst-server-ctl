@@ -49,11 +49,20 @@
     lastError?: string;
   };
 
+  type RuntimeLogResponse = {
+    shard: string;
+    lines: string[];
+  };
+
   let controller: ControllerStatus | null = null;
   let installation: InstallationStatus | null = null;
   let cluster: ClusterConfig | null = null;
   let clusterForm: ClusterFormState | null = null;
   let runtime: RuntimeStatus | null = null;
+  let runtimeLogs: Record<string, string[]> = {
+    Master: [],
+    Caves: []
+  };
   let installTasks: InstallationTask[] = [];
   let loading = true;
   let polling = false;
@@ -109,12 +118,14 @@
     refreshError = '';
 
     try {
-      const [controllerStatus, installationStatus, clusterConfig, runtimeStatus, tasks] = await Promise.all([
+      const [controllerStatus, installationStatus, clusterConfig, runtimeStatus, tasks, masterLogs, cavesLogs] = await Promise.all([
         fetchJSON<ControllerStatus>('/api/v1/status'),
         fetchJSON<InstallationStatus>('/api/v1/installation'),
         fetchJSON<ClusterConfig>('/api/v1/cluster'),
         fetchJSON<RuntimeStatus>('/api/v1/runtime'),
-        fetchJSON<InstallationTask[]>('/api/v1/install/tasks')
+        fetchJSON<InstallationTask[]>('/api/v1/install/tasks'),
+        fetchJSON<RuntimeLogResponse>('/api/v1/runtime/logs?shard=Master&lines=120'),
+        fetchJSON<RuntimeLogResponse>('/api/v1/runtime/logs?shard=Caves&lines=120')
       ]);
 
       const previousCluster = cluster;
@@ -122,6 +133,10 @@
       installation = installationStatus;
       cluster = clusterConfig;
       runtime = runtimeStatus;
+      runtimeLogs = {
+        Master: masterLogs.lines,
+        Caves: cavesLogs.lines
+      };
       installTasks = tasks;
       if (!clusterForm || !previousCluster || !clusterFormIsDirty(clusterForm, previousCluster)) {
         clusterForm = clusterFormFromConfig(clusterConfig);
@@ -623,6 +638,37 @@
           </div>
         {/if}
       </div>
+    </div>
+  </section>
+
+  <section class="panel panel-wide" aria-label="Runtime logs">
+    <div class="panel-heading">
+      <div>
+        <h2>Shard Logs</h2>
+        <p class="subtle">Recent output from the managed Master and Caves processes under the controller log directory.</p>
+      </div>
+    </div>
+
+    <div class="log-grid">
+      <article class="log-card">
+        <div class="log-card-head">
+          <strong>Master</strong>
+          <span class={`badge badge-${runtimeLogs.Master.length > 0 ? 'succeeded' : 'idle'}`}>
+            {runtimeLogs.Master.length > 0 ? `${runtimeLogs.Master.length} lines` : 'No output'}
+          </span>
+        </div>
+        <pre class="log-output">{runtimeLogs.Master.length > 0 ? runtimeLogs.Master.join('\n') : 'No Master log output yet.'}</pre>
+      </article>
+
+      <article class="log-card">
+        <div class="log-card-head">
+          <strong>Caves</strong>
+          <span class={`badge badge-${runtimeLogs.Caves.length > 0 ? 'succeeded' : 'idle'}`}>
+            {runtimeLogs.Caves.length > 0 ? `${runtimeLogs.Caves.length} lines` : 'No output'}
+          </span>
+        </div>
+        <pre class="log-output">{runtimeLogs.Caves.length > 0 ? runtimeLogs.Caves.join('\n') : 'No Caves log output yet.'}</pre>
+      </article>
     </div>
   </section>
 

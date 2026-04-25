@@ -14,6 +14,7 @@ var ErrInstallNotRequired = errors.New("install not required")
 var ErrDSTNotInstalled = errors.New("dst not installed")
 var ErrServerAlreadyRunning = errors.New("server already running")
 var ErrServerNotRunning = errors.New("server not running")
+var ErrInvalidShard = errors.New("invalid shard")
 
 type ShardName string
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -18,6 +19,7 @@ type Services struct {
 	Cluster      ClusterConfigManager
 	InstallTasks InstallationTaskService
 	Runtime      RuntimeService
+	RuntimeLogs  RuntimeLogService
 }
 
 type StatusReader interface {
@@ -42,6 +44,10 @@ type RuntimeService interface {
 	Status(ctx context.Context) (domain.RuntimeStatus, error)
 	Start(ctx context.Context) error
 	Stop(ctx context.Context) error
+}
+
+type RuntimeLogService interface {
+	Get(ctx context.Context, shard domain.ShardName, maxLines int) ([]string, error)
 }
 
 func NewRouter(logger *slog.Logger, services Services) http.Handler {
@@ -195,6 +201,35 @@ func NewRouter(logger *slog.Logger, services Services) http.Handler {
 		respondJSON(w, runtimeResponseFromDomain(status))
 	})
 
+	mux.HandleFunc("GET /api/v1/runtime/logs", func(w http.ResponseWriter, r *http.Request) {
+		shard := domain.ShardName(r.URL.Query().Get("shard"))
+		lines := 200
+		if value := r.URL.Query().Get("lines"); value != "" {
+			var parsed int
+			if _, err := fmt.Sscanf(value, "%d", &parsed); err != nil {
+				respondError(w, http.StatusBadRequest, "lines must be an integer")
+				return
+			}
+			lines = parsed
+		}
+
+		entries, err := services.RuntimeLogs.Get(r.Context(), shard, lines)
+		if errors.Is(err, domain.ErrInvalidShard) {
+			respondError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		if err != nil {
+			logger.Error("runtime logs failed", "error", err, "shard", shard)
+			respondError(w, http.StatusInternalServerError, "runtime logs unavailable")
+			return
+		}
+
+		respondJSON(w, runtimeLogResponse{
+			Shard: string(shard),
+			Lines: entries,
+		})
+	})
+
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, map[string]string{"status": "ok"})
 	})
@@ -269,6 +304,11 @@ type runtimeShardStatus struct {
 	Name    string `json:"name"`
 	Running bool   `json:"running"`
 	PID     int    `json:"pid,omitempty"`
+}
+
+type runtimeLogResponse struct {
+	Shard string   `json:"shard"`
+	Lines []string `json:"lines"`
 }
 
 type updateClusterRequest struct {

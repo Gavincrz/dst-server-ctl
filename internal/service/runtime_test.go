@@ -12,10 +12,11 @@ import (
 
 func TestRuntimeServiceStartLaunchesEnabledShards(t *testing.T) {
 	now := time.Date(2026, 4, 24, 14, 0, 0, 0, time.UTC)
+	process := &controlledRuntimeProcess{pid: 101, waitCh: make(chan error, 1)}
 	starter := &fakeShardProcessStarter{
 		processes: map[domain.ShardName]command.Process{
-			domain.ShardMaster: fakeRuntimeProcess{pid: 101},
-			domain.ShardCaves:  fakeRuntimeProcess{pid: 202},
+			domain.ShardMaster: process,
+			domain.ShardCaves:  &controlledRuntimeProcess{pid: 202, waitCh: make(chan error, 1)},
 		},
 	}
 
@@ -38,6 +39,7 @@ func TestRuntimeServiceStartLaunchesEnabledShards(t *testing.T) {
 		},
 		starter,
 	)
+	service.dispatch = func(fn func()) {}
 
 	if err := service.Start(context.Background()); err != nil {
 		t.Fatalf("Start() error = %v", err)
@@ -116,6 +118,7 @@ func TestRuntimeServiceStartStopsStartedShardsWhenLaterShardFails(t *testing.T) 
 		},
 		starter,
 	)
+	service.dispatch = func(fn func()) {}
 
 	err := service.Start(context.Background())
 	if err == nil {
@@ -126,6 +129,57 @@ func TestRuntimeServiceStartStopsStartedShardsWhenLaterShardFails(t *testing.T) 
 	}
 	if len(service.processes) != 0 {
 		t.Fatalf("process count = %d, want 0", len(service.processes))
+	}
+}
+
+func TestRuntimeServiceWatchShardClearsStateOnUnexpectedExit(t *testing.T) {
+	now := time.Date(2026, 4, 24, 14, 0, 0, 0, time.UTC)
+	process := &controlledRuntimeProcess{pid: 101, waitCh: make(chan error, 1)}
+	starter := &fakeShardProcessStarter{
+		processes: map[domain.ShardName]command.Process{
+			domain.ShardMaster: process,
+		},
+	}
+
+	service := NewRuntimeService(
+		domain.ManagedLayout{Root: "/srv/managed", DST: "/srv/managed/dst"},
+		&fakeInstallationStateRepository{
+			state: domain.InstallationState{
+				ManagedRoot:    "/srv/managed",
+				DSTInstalledAt: &now,
+			},
+		},
+		&fakeRuntimeClusterConfigRepository{
+			config: domain.ClusterConfig{
+				Shards: []domain.ShardConfig{{Name: domain.ShardMaster, Enabled: true}},
+			},
+		},
+		starter,
+	)
+	watchDone := make(chan struct{}, 1)
+	service.dispatch = func(fn func()) {
+		go func() {
+			fn()
+			watchDone <- struct{}{}
+		}()
+	}
+
+	if err := service.Start(context.Background()); err != nil {
+		t.Fatalf("Start() error = %v", err)
+	}
+
+	process.waitCh <- errors.New("exit 1")
+	<-watchDone
+
+	status, err := service.Status(context.Background())
+	if err != nil {
+		t.Fatalf("Status() error = %v", err)
+	}
+	if status.Status != domain.ServerStatusStopped {
+		t.Fatalf("status = %q, want stopped", status.Status)
+	}
+	if status.LastError == "" {
+		t.Fatal("LastError = empty, want exit message")
 	}
 }
 
@@ -242,6 +296,23 @@ type trackedRuntimeProcess struct {
 func (p *trackedRuntimeProcess) PID() int    { return p.pid }
 func (p *trackedRuntimeProcess) Wait() error { return nil }
 func (p *trackedRuntimeProcess) Kill() error {
+	p.killed = true
+	return nil
+}
+
+type controlledRuntimeProcess struct {
+	pid    int
+	waitCh chan error
+	killed bool
+}
+
+func (p *controlledRuntimeProcess) PID() int { return p.pid }
+
+func (p *controlledRuntimeProcess) Wait() error {
+	return <-p.waitCh
+}
+
+func (p *controlledRuntimeProcess) Kill() error {
 	p.killed = true
 	return nil
 }
