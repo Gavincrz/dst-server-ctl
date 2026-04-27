@@ -15,7 +15,7 @@ type CommandPlan struct {
 
 func StartShardPlan(layout domain.ManagedLayout, shard domain.ShardName) CommandPlan {
 	return CommandPlan{
-		Name: filepath.Join(layout.DST, "bin64", "dontstarve_dedicated_server_nullrenderer"),
+		Name: filepath.Join(layout.DST, "bin64", "dontstarve_dedicated_server_nullrenderer_x64"),
 		Args: []string{
 			"-persistent_storage_root", layout.Root,
 			"-conf_dir", "clusters",

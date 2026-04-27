@@ -2,6 +2,7 @@ package sqlite
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"path/filepath"
 	"testing"
@@ -21,6 +22,95 @@ func TestOpenMigratesDatabase(t *testing.T) {
 	}
 	if count != len(migrations) {
 		t.Fatalf("migration count = %d, want %d", count, len(migrations))
+	}
+}
+
+func TestOpenConfiguresSQLiteForControllerWorkload(t *testing.T) {
+	ctx := context.Background()
+	store := openTestStore(t, ctx)
+	defer store.Close()
+
+	stats := store.db.Stats()
+	if stats.MaxOpenConnections != 1 {
+		t.Fatalf("MaxOpenConnections = %d, want 1", stats.MaxOpenConnections)
+	}
+
+	var journalMode string
+	if err := store.db.QueryRowContext(ctx, `PRAGMA journal_mode`).Scan(&journalMode); err != nil {
+		t.Fatalf("PRAGMA journal_mode error = %v", err)
+	}
+	if journalMode != "wal" {
+		t.Fatalf("journal_mode = %q, want wal", journalMode)
+	}
+
+	var busyTimeout int
+	if err := store.db.QueryRowContext(ctx, `PRAGMA busy_timeout`).Scan(&busyTimeout); err != nil {
+		t.Fatalf("PRAGMA busy_timeout error = %v", err)
+	}
+	if busyTimeout != 5000 {
+		t.Fatalf("busy_timeout = %d, want 5000", busyTimeout)
+	}
+}
+
+func TestListTasksWaitsForWriterInsteadOfReturningBusy(t *testing.T) {
+	ctx := context.Background()
+	dbPath := filepath.Join(t.TempDir(), "state.db")
+	store, err := Open(ctx, dbPath)
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer store.Close()
+
+	task := domain.Task{
+		ID:        "task-1",
+		Type:      domain.TaskTypeInstallDST,
+		Status:    domain.TaskStatusPending,
+		Detail:    "Install DST",
+		CreatedAt: time.Date(2026, 4, 25, 1, 0, 0, 0, time.UTC),
+		UpdatedAt: time.Date(2026, 4, 25, 1, 0, 0, 0, time.UTC),
+	}
+	if err := store.CreateTask(ctx, task); err != nil {
+		t.Fatalf("CreateTask() error = %v", err)
+	}
+
+	locker, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("sql.Open(locker) error = %v", err)
+	}
+	defer locker.Close()
+
+	if _, err := locker.ExecContext(ctx, `PRAGMA busy_timeout = 5000`); err != nil {
+		t.Fatalf("set locker busy_timeout error = %v", err)
+	}
+
+	tx, err := locker.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatalf("locker.BeginTx() error = %v", err)
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.ExecContext(ctx, `UPDATE tasks SET detail = detail WHERE id = ?`, string(task.ID)); err != nil {
+		t.Fatalf("lock task row error = %v", err)
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := store.ListTasks(ctx)
+		done <- err
+	}()
+
+	time.Sleep(200 * time.Millisecond)
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("locker.Commit() error = %v", err)
+	}
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("ListTasks() error = %v, want nil", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("ListTasks() did not complete after writer released lock")
 	}
 }
 

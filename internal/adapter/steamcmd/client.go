@@ -19,11 +19,13 @@ func NewClient(runner command.Runner) *Client {
 	return &Client{runner: runner}
 }
 
-func (c *Client) InstallSteamCMD(ctx context.Context, layout domain.ManagedLayout) (command.Result, error) {
+func (c *Client) InstallSteamCMD(ctx context.Context, layout domain.ManagedLayout, logPath string) (command.Result, error) {
 	archivePath := filepath.Join(layout.SteamCMD, "steamcmd_linux.tar.gz")
+	options := command.StartOptions{StdoutPath: logPath, StderrPath: logPath}
 
-	downloadResult, err := c.runner.Run(
+	downloadResult, err := c.runner.RunWithOptions(
 		ctx,
+		options,
 		"curl",
 		"-fsSL",
 		steamCMDDownloadURL,
@@ -34,8 +36,9 @@ func (c *Client) InstallSteamCMD(ctx context.Context, layout domain.ManagedLayou
 		return downloadResult, fmt.Errorf("download steamcmd: %w", err)
 	}
 
-	extractResult, err := c.runner.Run(
+	extractResult, err := c.runner.RunWithOptions(
 		ctx,
+		options,
 		"tar",
 		"-xzf",
 		archivePath,
@@ -49,7 +52,7 @@ func (c *Client) InstallSteamCMD(ctx context.Context, layout domain.ManagedLayou
 	return extractResult, nil
 }
 
-func (c *Client) InstallDST(ctx context.Context, layout domain.ManagedLayout) (command.Result, error) {
+func (c *Client) InstallDST(ctx context.Context, layout domain.ManagedLayout, logPath string) (command.Result, error) {
 	plan := InstallDSTPlan(layout)
-	return c.runner.Run(ctx, plan.Name, plan.Args...)
+	return c.runner.RunWithOptions(ctx, command.StartOptions{StdoutPath: logPath, StderrPath: logPath}, plan.Name, plan.Args...)
 }

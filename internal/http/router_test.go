@@ -179,6 +179,35 @@ func TestStartInstallTasksEndpointReturnsConflict(t *testing.T) {
 	}
 }
 
+func TestInstallTaskLogsEndpoint(t *testing.T) {
+	router := NewRouter(testLogger(), Services{
+		Status:          fakeStatusReader{},
+		Installation:    fakeInstallationStatusReader{},
+		Cluster:         fakeClusterConfigService{},
+		InstallTasks:    fakeInstallationTaskService{},
+		InstallTaskLogs: fakeInstallTaskLogService{lines: []string{"steamcmd: starting", "steamcmd: downloading"}},
+	})
+
+	request := httptest.NewRequest(nethttp.MethodGet, "/api/v1/install/tasks/task-1/logs?lines=50", nil)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	if response.Code != nethttp.StatusOK {
+		t.Fatalf("status = %d, want %d", response.Code, nethttp.StatusOK)
+	}
+
+	var payload taskLogResponse
+	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode response error = %v", err)
+	}
+	if payload.TaskID != "task-1" {
+		t.Fatalf("taskID = %q, want task-1", payload.TaskID)
+	}
+	if len(payload.Lines) != 2 {
+		t.Fatalf("line count = %d, want 2", len(payload.Lines))
+	}
+}
+
 func TestGetClusterConfigEndpoint(t *testing.T) {
 	createdAt := time.Date(2026, 4, 24, 11, 0, 0, 0, time.UTC)
 	router := NewRouter(testLogger(), Services{
@@ -526,6 +555,11 @@ type fakeRuntimeLogService struct {
 	err   error
 }
 
+type fakeInstallTaskLogService struct {
+	lines []string
+	err   error
+}
+
 type fakeRuntimeHistoryService struct {
 	events []domain.RuntimeEvent
 	err    error
@@ -579,6 +613,13 @@ func (s fakeRuntimeService) Stop(context.Context) error {
 }
 
 func (s fakeRuntimeLogService) Get(context.Context, domain.ShardName, int) ([]string, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return s.lines, nil
+}
+
+func (s fakeInstallTaskLogService) Get(context.Context, domain.TaskID, int) ([]string, error) {
 	if s.err != nil {
 		return nil, s.err
 	}

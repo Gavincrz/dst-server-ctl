@@ -1,8 +1,10 @@
 package command
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -28,6 +30,7 @@ type StartOptions struct {
 
 type Runner interface {
 	Run(ctx context.Context, name string, args ...string) (Result, error)
+	RunWithOptions(ctx context.Context, options StartOptions, name string, args ...string) (Result, error)
 	Start(ctx context.Context, name string, args ...string) (Process, error)
 	StartWithOptions(ctx context.Context, options StartOptions, name string, args ...string) (Process, error)
 }
@@ -35,26 +38,47 @@ type Runner interface {
 type ExecRunner struct{}
 
 func (ExecRunner) Run(ctx context.Context, name string, args ...string) (Result, error) {
+	return ExecRunner{}.RunWithOptions(ctx, StartOptions{}, name, args...)
+}
+
+func (ExecRunner) RunWithOptions(ctx context.Context, options StartOptions, name string, args ...string) (Result, error) {
 	if name == "" {
 		return Result{}, ErrEmptyCommand
 	}
 
 	cmd := exec.CommandContext(ctx, name, args...)
+	stdoutWriter, stdoutBuffer, stdoutCloser, err := prepareOutputWriter(options.StdoutPath)
+	if err != nil {
+		return Result{}, err
+	}
+	if stdoutCloser != nil {
+		defer stdoutCloser.Close()
+	}
+	stderrWriter, stderrBuffer, stderrCloser, err := prepareOutputWriter(options.StderrPath)
+	if err != nil {
+		return Result{}, err
+	}
+	if stderrCloser != nil {
+		defer stderrCloser.Close()
+	}
+	cmd.Stdout = stdoutWriter
+	cmd.Stderr = stderrWriter
 
-	stdout, err := cmd.Output()
+	err = cmd.Run()
+	result := Result{
+		Stdout: stdoutBuffer.String(),
+		Stderr: stderrBuffer.String(),
+	}
 	if err == nil {
-		return Result{Stdout: string(stdout)}, nil
+		return result, nil
 	}
 
 	var exitErr *exec.ExitError
 	if errors.As(err, &exitErr) {
-		return Result{
-			Stdout: string(stdout),
-			Stderr: string(exitErr.Stderr),
-		}, err
+		return result, err
 	}
 
-	return Result{Stdout: string(stdout)}, err
+	return result, err
 }
 
 func (ExecRunner) Start(ctx context.Context, name string, args ...string) (Process, error) {
@@ -93,6 +117,20 @@ func applyStartOptions(cmd *exec.Cmd, options StartOptions) error {
 		cmd.Stderr = file
 	}
 	return nil
+}
+
+func prepareOutputWriter(path string) (io.Writer, *bytes.Buffer, io.Closer, error) {
+	buffer := &bytes.Buffer{}
+	if path == "" {
+		return buffer, buffer, nil, nil
+	}
+
+	file, err := openLogFile(path)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	return io.MultiWriter(buffer, file), buffer, file, nil
 }
 
 func openLogFile(path string) (*os.File, error) {

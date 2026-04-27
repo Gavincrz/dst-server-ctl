@@ -23,14 +23,15 @@ func TestInstallRunnerServiceStartCreatesAndExecutesTasks(t *testing.T) {
 	tasks := &fakeTaskRepository{}
 	taskService := NewInstallTaskService(tasks, &fakeTaskIDGenerator{ids: []domain.TaskID{"task-1", "task-2"}})
 	taskService.now = func() time.Time { return now }
+	runner := &fakeInstallCommandRunner{}
 
 	service := NewInstallRunnerService(
-		domain.ManagedLayout{Root: "/srv/managed", SteamCMD: "/srv/managed/steamcmd", DST: "/srv/managed/dst"},
+		domain.ManagedLayout{Root: "/srv/managed", SteamCMD: "/srv/managed/steamcmd", DST: "/srv/managed/dst", Logs: "/srv/managed/logs"},
 		installs,
 		tasks,
 		NewInstallPlanner(),
 		taskService,
-		&fakeInstallCommandRunner{},
+		runner,
 	)
 	service.now = func() time.Time {
 		now = now.Add(time.Minute)
@@ -66,6 +67,12 @@ func TestInstallRunnerServiceStartCreatesAndExecutesTasks(t *testing.T) {
 	}
 	if installs.saved.DSTInstalledAt == nil {
 		t.Fatal("DSTInstalledAt = nil, want populated")
+	}
+	if runner.steamCMDLogPath != "/srv/managed/logs/install-task-1.log" {
+		t.Fatalf("steamCMDLogPath = %q, want /srv/managed/logs/install-task-1.log", runner.steamCMDLogPath)
+	}
+	if runner.dstLogPath != "/srv/managed/logs/install-task-2.log" {
+		t.Fatalf("dstLogPath = %q, want /srv/managed/logs/install-task-2.log", runner.dstLogPath)
 	}
 }
 
@@ -179,12 +186,16 @@ type fakeInstallCommandRunner struct {
 	installSteamCMDErr    error
 	installDSTResult      command.Result
 	installDSTErr         error
+	steamCMDLogPath       string
+	dstLogPath            string
 }
 
-func (r *fakeInstallCommandRunner) InstallSteamCMD(context.Context, domain.ManagedLayout) (command.Result, error) {
+func (r *fakeInstallCommandRunner) InstallSteamCMD(_ context.Context, _ domain.ManagedLayout, logPath string) (command.Result, error) {
+	r.steamCMDLogPath = logPath
 	return r.installSteamCMDResult, r.installSteamCMDErr
 }
 
-func (r *fakeInstallCommandRunner) InstallDST(context.Context, domain.ManagedLayout) (command.Result, error) {
+func (r *fakeInstallCommandRunner) InstallDST(_ context.Context, _ domain.ManagedLayout, logPath string) (command.Result, error) {
+	r.dstLogPath = logPath
 	return r.installDSTResult, r.installDSTErr
 }

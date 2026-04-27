@@ -14,13 +14,14 @@ import (
 )
 
 type Services struct {
-	Status         StatusReader
-	Installation   InstallationStatusReader
-	Cluster        ClusterConfigManager
-	InstallTasks   InstallationTaskService
-	Runtime        RuntimeService
-	RuntimeLogs    RuntimeLogService
-	RuntimeHistory RuntimeHistoryService
+	Status          StatusReader
+	Installation    InstallationStatusReader
+	Cluster         ClusterConfigManager
+	InstallTasks    InstallationTaskService
+	InstallTaskLogs InstallTaskLogService
+	Runtime         RuntimeService
+	RuntimeLogs     RuntimeLogService
+	RuntimeHistory  RuntimeHistoryService
 }
 
 type StatusReader interface {
@@ -46,6 +47,10 @@ type RuntimeService interface {
 	Start(ctx context.Context) error
 	Restart(ctx context.Context) error
 	Stop(ctx context.Context) error
+}
+
+type InstallTaskLogService interface {
+	Get(ctx context.Context, taskID domain.TaskID, maxLines int) ([]string, error)
 }
 
 type RuntimeLogService interface {
@@ -146,6 +151,34 @@ func NewRouter(logger *slog.Logger, services Services) http.Handler {
 
 		w.WriteHeader(http.StatusAccepted)
 		respondJSON(w, taskListResponseFromDomain(tasks))
+	})
+
+	mux.HandleFunc("GET /api/v1/install/tasks/{id}/logs", func(w http.ResponseWriter, r *http.Request) {
+		lines := 200
+		if value := r.URL.Query().Get("lines"); value != "" {
+			var parsed int
+			if _, err := fmt.Sscanf(value, "%d", &parsed); err != nil {
+				respondError(w, http.StatusBadRequest, "lines must be an integer")
+				return
+			}
+			lines = parsed
+		}
+
+		entries, err := services.InstallTaskLogs.Get(r.Context(), domain.TaskID(r.PathValue("id")), lines)
+		if errors.Is(err, domain.ErrTaskNotFound) {
+			respondError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		if err != nil {
+			logger.Error("install task logs failed", "error", err, "taskID", r.PathValue("id"))
+			respondError(w, http.StatusInternalServerError, "install task logs unavailable")
+			return
+		}
+
+		respondJSON(w, taskLogResponse{
+			TaskID: r.PathValue("id"),
+			Lines:  entries,
+		})
 	})
 
 	mux.HandleFunc("GET /api/v1/runtime", func(w http.ResponseWriter, r *http.Request) {
@@ -360,6 +393,11 @@ type runtimeShardStatus struct {
 type runtimeLogResponse struct {
 	Shard string   `json:"shard"`
 	Lines []string `json:"lines"`
+}
+
+type taskLogResponse struct {
+	TaskID string   `json:"taskId"`
+	Lines  []string `json:"lines"`
 }
 
 type runtimeHistoryEventResponse struct {

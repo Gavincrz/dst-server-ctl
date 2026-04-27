@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -17,8 +18,8 @@ type InstallPlannerReader interface {
 }
 
 type InstallCommandRunner interface {
-	InstallSteamCMD(ctx context.Context, layout domain.ManagedLayout) (command.Result, error)
-	InstallDST(ctx context.Context, layout domain.ManagedLayout) (command.Result, error)
+	InstallSteamCMD(ctx context.Context, layout domain.ManagedLayout, logPath string) (command.Result, error)
+	InstallDST(ctx context.Context, layout domain.ManagedLayout, logPath string) (command.Result, error)
 }
 
 type InstallRunnerService struct {
@@ -128,9 +129,9 @@ func (s *InstallRunnerService) executeTask(ctx context.Context, state *domain.In
 
 	switch task.Type {
 	case domain.TaskTypeInstallSteamCMD:
-		result, err = s.runner.InstallSteamCMD(ctx, s.layout)
+		result, err = s.runner.InstallSteamCMD(ctx, s.layout, installTaskLogPath(s.layout, task.ID))
 	case domain.TaskTypeInstallDST:
-		result, err = s.runner.InstallDST(ctx, s.layout)
+		result, err = s.runner.InstallDST(ctx, s.layout, installTaskLogPath(s.layout, task.ID))
 	default:
 		return fmt.Errorf("unsupported install task type %q", task.Type)
 	}
@@ -152,6 +153,10 @@ func (s *InstallRunnerService) executeTask(ctx context.Context, state *domain.In
 	}
 
 	return nil
+}
+
+func installTaskLogPath(layout domain.ManagedLayout, taskID domain.TaskID) string {
+	return filepath.Join(layout.Logs, "install-"+string(taskID)+".log")
 }
 
 func (s *InstallRunnerService) markTaskRunning(ctx context.Context, task *domain.Task) error {

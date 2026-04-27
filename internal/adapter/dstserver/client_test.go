@@ -29,7 +29,7 @@ func TestClientStartShardUsesProcessRunner(t *testing.T) {
 	if len(runner.calls) != 1 {
 		t.Fatalf("call count = %d, want 1", len(runner.calls))
 	}
-	if runner.calls[0].name != "/srv/managed/dst/bin64/dontstarve_dedicated_server_nullrenderer" {
+	if runner.calls[0].name != "/srv/managed/dst/bin64/dontstarve_dedicated_server_nullrenderer_x64" {
 		t.Fatalf("name = %q", runner.calls[0].name)
 	}
 
@@ -75,6 +75,10 @@ type fakeRunner struct {
 }
 
 func (r *fakeRunner) Run(context.Context, string, ...string) (command.Result, error) {
+	return command.Result{}, nil
+}
+
+func (r *fakeRunner) RunWithOptions(context.Context, command.StartOptions, string, ...string) (command.Result, error) {
 	return command.Result{}, nil
 }
 

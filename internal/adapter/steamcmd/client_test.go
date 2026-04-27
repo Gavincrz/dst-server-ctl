@@ -14,7 +14,7 @@ func TestClientInstallSteamCMDUsesCommandRunner(t *testing.T) {
 	runner := &fakeRunner{}
 	client := NewClient(runner)
 
-	_, err := client.InstallSteamCMD(context.Background(), domain.ManagedLayout{SteamCMD: "/srv/managed/steamcmd"})
+	_, err := client.InstallSteamCMD(context.Background(), domain.ManagedLayout{SteamCMD: "/srv/managed/steamcmd"}, "/srv/managed/logs/install-task.log")
 	if err != nil {
 		t.Fatalf("InstallSteamCMD() error = %v", err)
 	}
@@ -36,6 +36,9 @@ func TestClientInstallSteamCMDUsesCommandRunner(t *testing.T) {
 	if !reflect.DeepEqual(runner.calls[0].args, wantDownloadArgs) {
 		t.Fatalf("download args = %#v, want %#v", runner.calls[0].args, wantDownloadArgs)
 	}
+	if runner.calls[0].options.StdoutPath != "/srv/managed/logs/install-task.log" || runner.calls[0].options.StderrPath != "/srv/managed/logs/install-task.log" {
+		t.Fatalf("download log paths = %#v, want install task log", runner.calls[0].options)
+	}
 
 	if runner.calls[1].name != "tar" {
 		t.Fatalf("second command = %q, want tar", runner.calls[1].name)
@@ -50,6 +53,9 @@ func TestClientInstallSteamCMDUsesCommandRunner(t *testing.T) {
 	if !reflect.DeepEqual(runner.calls[1].args, wantExtractArgs) {
 		t.Fatalf("extract args = %#v, want %#v", runner.calls[1].args, wantExtractArgs)
 	}
+	if runner.calls[1].options.StdoutPath != "/srv/managed/logs/install-task.log" || runner.calls[1].options.StderrPath != "/srv/managed/logs/install-task.log" {
+		t.Fatalf("extract log paths = %#v, want install task log", runner.calls[1].options)
+	}
 }
 
 func TestClientInstallSteamCMDReturnsDownloadError(t *testing.T) {
@@ -57,7 +63,7 @@ func TestClientInstallSteamCMDReturnsDownloadError(t *testing.T) {
 	runner := &fakeRunner{errs: []error{wantErr}}
 	client := NewClient(runner)
 
-	_, err := client.InstallSteamCMD(context.Background(), domain.ManagedLayout{SteamCMD: "/srv/managed/steamcmd"})
+	_, err := client.InstallSteamCMD(context.Background(), domain.ManagedLayout{SteamCMD: "/srv/managed/steamcmd"}, "/srv/managed/logs/install-task.log")
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("InstallSteamCMD() error = %v, want %v", err, wantErr)
 	}
@@ -70,7 +76,7 @@ func TestClientInstallDSTUsesCommandRunner(t *testing.T) {
 	_, err := client.InstallDST(context.Background(), domain.ManagedLayout{
 		SteamCMD: "/srv/managed/steamcmd",
 		DST:      "/srv/dst",
-	})
+	}, "/srv/managed/logs/install-task.log")
 	if err != nil {
 		t.Fatalf("InstallDST() error = %v", err)
 	}
@@ -90,11 +96,15 @@ func TestClientInstallDSTUsesCommandRunner(t *testing.T) {
 	if !reflect.DeepEqual(runner.calls[0].args, wantArgs) {
 		t.Fatalf("args = %#v, want %#v", runner.calls[0].args, wantArgs)
 	}
+	if runner.calls[0].options.StdoutPath != "/srv/managed/logs/install-task.log" || runner.calls[0].options.StderrPath != "/srv/managed/logs/install-task.log" {
+		t.Fatalf("log paths = %#v, want install task log", runner.calls[0].options)
+	}
 }
 
 type fakeRunnerCall struct {
-	name string
-	args []string
+	name    string
+	args    []string
+	options command.StartOptions
 }
 
 type fakeRunner struct {
@@ -103,7 +113,11 @@ type fakeRunner struct {
 }
 
 func (r *fakeRunner) Run(_ context.Context, name string, args ...string) (command.Result, error) {
-	r.calls = append(r.calls, fakeRunnerCall{name: name, args: args})
+	return r.RunWithOptions(context.Background(), command.StartOptions{}, name, args...)
+}
+
+func (r *fakeRunner) RunWithOptions(_ context.Context, options command.StartOptions, name string, args ...string) (command.Result, error) {
+	r.calls = append(r.calls, fakeRunnerCall{name: name, args: args, options: options})
 	if len(r.errs) == 0 {
 		return command.Result{}, nil
 	}
