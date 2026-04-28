@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"dst-server-ctl/internal/domain"
+	"dst-server-ctl/internal/service"
 )
 
 type Services struct {
@@ -37,7 +38,7 @@ type UpdateService interface {
 	Status(ctx context.Context) (domain.UpdateState, error)
 	ListTasks(ctx context.Context) ([]domain.Task, error)
 	CheckNow(ctx context.Context) (domain.UpdateState, error)
-	Start(ctx context.Context) (domain.Task, error)
+	Start(ctx context.Context, options service.UpdateStartOptions) (domain.Task, error)
 }
 
 type InstallationTaskService interface {
@@ -136,7 +137,15 @@ func NewRouter(logger *slog.Logger, services Services) http.Handler {
 	})
 
 	mux.HandleFunc("POST /api/v1/update/tasks", func(w http.ResponseWriter, r *http.Request) {
-		task, err := services.Updates.Start(r.Context())
+		var request updateStartRequest
+		if err := decodeOptionalJSON(r, &request); err != nil {
+			respondError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+
+		task, err := services.Updates.Start(r.Context(), service.UpdateStartOptions{
+			AllowStop: request.AllowStop,
+		})
 		switch {
 		case errors.Is(err, domain.ErrDSTNotInstalled):
 			respondError(w, http.StatusConflict, "dst is not installed")
@@ -146,6 +155,9 @@ func NewRouter(logger *slog.Logger, services Services) http.Handler {
 			return
 		case errors.Is(err, domain.ErrUpdateNotRequired):
 			respondError(w, http.StatusConflict, "update not required")
+			return
+		case errors.Is(err, domain.ErrUpdateRequiresServerStop):
+			respondError(w, http.StatusConflict, "server is running; confirm stop before updating")
 			return
 		case err != nil:
 			logger.Error("start update failed", "error", err)
@@ -504,6 +516,10 @@ type updateClusterRequest struct {
 	Shards             []shardConfig `json:"shards"`
 }
 
+type updateStartRequest struct {
+	AllowStop bool `json:"allowStop"`
+}
+
 type shardConfig struct {
 	Name    string `json:"name"`
 	Enabled bool   `json:"enabled"`
@@ -635,6 +651,27 @@ func decodeJSON(r *http.Request, target any) error {
 	decoder.DisallowUnknownFields()
 
 	if err := decoder.Decode(target); err != nil {
+		return err
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		return errors.New("request body must contain a single JSON object")
+	}
+
+	return nil
+}
+
+func decodeOptionalJSON(r *http.Request, target any) error {
+	if r.Body == nil {
+		return nil
+	}
+
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+
+	if err := decoder.Decode(target); err != nil {
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
 		return err
 	}
 	if err := decoder.Decode(&struct{}{}); err != io.EOF {

@@ -21,6 +21,15 @@ type UpdateVersionReader interface {
 	UpdateDST(ctx context.Context, layout domain.ManagedLayout, logPath string) (command.Result, error)
 }
 
+type UpdateRuntimeController interface {
+	Status(ctx context.Context) (domain.RuntimeStatus, error)
+	Stop(ctx context.Context) error
+}
+
+type UpdateStartOptions struct {
+	AllowStop bool
+}
+
 type UpdateService struct {
 	layout   domain.ManagedLayout
 	installs InstallationStateRepository
@@ -28,6 +37,7 @@ type UpdateService struct {
 	tasks    TaskRepository
 	ids      TaskIDGenerator
 	reader   UpdateVersionReader
+	runtime  UpdateRuntimeController
 	now      func() time.Time
 	dispatch func(func())
 
@@ -41,6 +51,7 @@ func NewUpdateService(
 	tasks TaskRepository,
 	ids TaskIDGenerator,
 	reader UpdateVersionReader,
+	runtime UpdateRuntimeController,
 ) *UpdateService {
 	return &UpdateService{
 		layout:   layout,
@@ -49,6 +60,7 @@ func NewUpdateService(
 		tasks:    tasks,
 		ids:      ids,
 		reader:   reader,
+		runtime:  runtime,
 		now:      time.Now,
 		dispatch: func(fn func()) {
 			go fn()
@@ -103,7 +115,7 @@ func (s *UpdateService) CheckNow(ctx context.Context) (domain.UpdateState, error
 	return s.checkNowLocked(ctx)
 }
 
-func (s *UpdateService) Start(ctx context.Context) (domain.Task, error) {
+func (s *UpdateService) Start(ctx context.Context, options UpdateStartOptions) (domain.Task, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -121,6 +133,9 @@ func (s *UpdateService) Start(ctx context.Context) (domain.Task, error) {
 	if !state.UpdateAvailable {
 		return domain.Task{}, domain.ErrUpdateNotRequired
 	}
+	if err := s.ensureUpdateCanStopRuntime(ctx, options); err != nil {
+		return domain.Task{}, err
+	}
 
 	task, err := s.createTask(ctx, domain.TaskTypeUpdateDST, "Update Don't Starve Together dedicated server app 343050")
 	if err != nil {
@@ -132,6 +147,28 @@ func (s *UpdateService) Start(ctx context.Context) (domain.Task, error) {
 	})
 
 	return task, nil
+}
+
+func (s *UpdateService) ensureUpdateCanStopRuntime(ctx context.Context, options UpdateStartOptions) error {
+	if s.runtime == nil {
+		return nil
+	}
+
+	status, err := s.runtime.Status(ctx)
+	if err != nil {
+		return err
+	}
+	if status.Status != domain.ServerStatusRunning {
+		return nil
+	}
+	if !options.AllowStop {
+		return domain.ErrUpdateRequiresServerStop
+	}
+	if err := s.runtime.Stop(ctx); err != nil && !errors.Is(err, domain.ErrServerNotRunning) {
+		return fmt.Errorf("stop runtime for update: %w", err)
+	}
+
+	return nil
 }
 
 func (s *UpdateService) StartPeriodicChecks(ctx context.Context, interval time.Duration) {

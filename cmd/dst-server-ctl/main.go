@@ -52,6 +52,13 @@ func main() {
 		os.Exit(1)
 	}
 	taskService := service.NewInstallTaskService(store, taskid.Generator{})
+	runtimeService := service.NewRuntimeService(
+		layout,
+		store,
+		store,
+		store,
+		dstserver.NewClient(command.ExecRunner{}),
+	)
 	updateService := service.NewUpdateService(
 		layout,
 		store,
@@ -59,6 +66,7 @@ func main() {
 		store,
 		taskid.Generator{},
 		steamcmd.NewClient(command.ExecRunner{}),
+		runtimeService,
 	)
 	if _, err := updateService.Initialize(ctx); err != nil {
 		logger.Error("update state initialization failed", "root", layout.Root, "error", err)
@@ -72,13 +80,6 @@ func main() {
 		service.NewInstallPlanner(),
 		taskService,
 		steamcmd.NewClient(command.ExecRunner{}),
-	)
-	runtimeService := service.NewRuntimeService(
-		layout,
-		store,
-		store,
-		store,
-		dstserver.NewClient(command.ExecRunner{}),
 	)
 	installTaskLogService := service.NewInstallTaskLogService(layout, logtail.Reader{})
 	runtimeLogService := service.NewRuntimeLogService(layout, logtail.Reader{})

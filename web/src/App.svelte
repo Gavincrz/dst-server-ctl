@@ -430,6 +430,16 @@
     return !!install?.dstInstalled && !!status?.updateAvailable && !hasActiveUpdateTasks(tasks) && !updateSubmitting && !updateCheckSubmitting;
   }
 
+  function updateActionLabel(status: UpdateStatus | null, runtimeStatus: RuntimeStatus | null) {
+    if (updateSubmitting) {
+      return runtimeRunning(runtimeStatus) ? 'Stopping Server and Updating' : 'Starting Update';
+    }
+    if (runtimeRunning(runtimeStatus) && status?.updateAvailable) {
+      return 'Stop Server and Update';
+    }
+    return 'Run Update';
+  }
+
   function resetClusterForm() {
     if (!cluster) {
       return;
@@ -547,9 +557,24 @@
     updateSubmitting = true;
     updateError = '';
     updateMessage = '';
+    const allowStop = runtimeRunning(runtime);
+
+    if (allowStop) {
+      const confirmed = window.confirm('The managed DST server is currently running. Start update now and stop all shards first?');
+      if (!confirmed) {
+        updateSubmitting = false;
+        return;
+      }
+    }
 
     try {
-      const response = await fetch('/api/v1/update/tasks', { method: 'POST' });
+      const response = await fetch('/api/v1/update/tasks', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ allowStop })
+      });
       if (!response.ok) {
         let message = `Update request returned HTTP ${response.status}`;
         try {
@@ -565,7 +590,9 @@
 
       const task = (await response.json()) as InstallationTask;
       updateTasks = [task, ...updateTasks];
-      updateMessage = 'DST update started. Progress will refresh automatically.';
+      updateMessage = allowStop
+        ? 'DST update started after stopping the running server. Progress will refresh automatically.'
+        : 'DST update started. Progress will refresh automatically.';
       await refresh({ background: true });
     } catch (err) {
       updateError = err instanceof Error ? err.message : 'Update request failed';
@@ -791,15 +818,15 @@
         <h2>Updates</h2>
         <p class="subtle">Compare the managed DST install against the latest upstream build and trigger a manual update when needed.</p>
       </div>
-      <div class="panel-actions">
-        <button type="button" class="secondary-action" disabled={!canCheckUpdates(installation, updateTasks)} on:click={checkUpdates}>
-          {updateCheckSubmitting ? 'Checking' : 'Check Now'}
-        </button>
-        <button type="button" disabled={!canStartUpdate(updates, installation, updateTasks)} on:click={startUpdate}>
-          {updateSubmitting ? 'Starting Update' : 'Run Update'}
-        </button>
+        <div class="panel-actions">
+          <button type="button" class="secondary-action" disabled={!canCheckUpdates(installation, updateTasks)} on:click={checkUpdates}>
+            {updateCheckSubmitting ? 'Checking' : 'Check Now'}
+          </button>
+          <button type="button" disabled={!canStartUpdate(updates, installation, updateTasks)} on:click={startUpdate}>
+            {updateActionLabel(updates, runtime)}
+          </button>
+        </div>
       </div>
-    </div>
 
     <div class="runtime-layout">
       <div class="runtime-hero">
@@ -809,6 +836,9 @@
           </span>
           <h3>{updateHeading(updates)}</h3>
           <p>{updateMessageBody(updates)}</p>
+          {#if runtimeRunning(runtime)}
+            <p>The managed server is currently running. Starting an update will require confirmation and stop both shards first.</p>
+          {/if}
           {#if updates?.lastError}
             <p class="task-error">{updates.lastError}</p>
           {/if}

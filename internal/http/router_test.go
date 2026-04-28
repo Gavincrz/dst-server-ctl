@@ -1,6 +1,7 @@
 package http
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"dst-server-ctl/internal/domain"
+	"dst-server-ctl/internal/service"
 )
 
 func TestInstallationStatusEndpoint(t *testing.T) {
@@ -61,7 +63,7 @@ func TestUpdateStatusEndpoint(t *testing.T) {
 	router := NewRouter(testLogger(), Services{
 		Status:       fakeStatusReader{},
 		Installation: fakeInstallationStatusReader{},
-		Updates: fakeUpdateService{
+		Updates: &fakeUpdateService{
 			state: domain.UpdateState{
 				CurrentVersion:  "100",
 				LatestVersion:   "101",
@@ -96,7 +98,7 @@ func TestUpdateCheckEndpoint(t *testing.T) {
 	router := NewRouter(testLogger(), Services{
 		Status:       fakeStatusReader{},
 		Installation: fakeInstallationStatusReader{},
-		Updates: fakeUpdateService{
+		Updates: &fakeUpdateService{
 			checked: domain.UpdateState{
 				CurrentVersion:  "100",
 				LatestVersion:   "101",
@@ -121,7 +123,7 @@ func TestUpdateStartEndpoint(t *testing.T) {
 	router := NewRouter(testLogger(), Services{
 		Status:       fakeStatusReader{},
 		Installation: fakeInstallationStatusReader{},
-		Updates: fakeUpdateService{
+		Updates: &fakeUpdateService{
 			startedTask: domain.Task{
 				ID:        "update-1",
 				Type:      domain.TaskTypeUpdateDST,
@@ -141,6 +143,55 @@ func TestUpdateStartEndpoint(t *testing.T) {
 
 	if response.Code != nethttp.StatusAccepted {
 		t.Fatalf("status = %d, want %d", response.Code, nethttp.StatusAccepted)
+	}
+}
+
+func TestUpdateStartEndpointRequiresStopConfirmation(t *testing.T) {
+	router := NewRouter(testLogger(), Services{
+		Status:       fakeStatusReader{},
+		Installation: fakeInstallationStatusReader{},
+		Updates: &fakeUpdateService{
+			startErr: domain.ErrUpdateRequiresServerStop,
+		},
+		Cluster:      fakeClusterConfigService{},
+		InstallTasks: fakeInstallationTaskService{},
+	})
+
+	request := httptest.NewRequest(nethttp.MethodPost, "/api/v1/update/tasks", nil)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	if response.Code != nethttp.StatusConflict {
+		t.Fatalf("status = %d, want %d", response.Code, nethttp.StatusConflict)
+	}
+}
+
+func TestUpdateStartEndpointPassesAllowStopOption(t *testing.T) {
+	service := &fakeUpdateService{
+		startedTask: domain.Task{
+			ID:     "update-2",
+			Type:   domain.TaskTypeUpdateDST,
+			Status: domain.TaskStatusPending,
+		},
+	}
+	router := NewRouter(testLogger(), Services{
+		Status:       fakeStatusReader{},
+		Installation: fakeInstallationStatusReader{},
+		Updates:      service,
+		Cluster:      fakeClusterConfigService{},
+		InstallTasks: fakeInstallationTaskService{},
+	})
+
+	request := httptest.NewRequest(nethttp.MethodPost, "/api/v1/update/tasks", bytes.NewBufferString(`{"allowStop":true}`))
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	if response.Code != nethttp.StatusAccepted {
+		t.Fatalf("status = %d, want %d", response.Code, nethttp.StatusAccepted)
+	}
+	if !service.startOptions.AllowStop {
+		t.Fatal("AllowStop = false, want true")
 	}
 }
 
@@ -624,14 +675,15 @@ type fakeInstallationTaskService struct {
 }
 
 type fakeUpdateService struct {
-	state       domain.UpdateState
-	statusErr   error
-	tasks       []domain.Task
-	listErr     error
-	checked     domain.UpdateState
-	checkErr    error
-	startedTask domain.Task
-	startErr    error
+	state        domain.UpdateState
+	statusErr    error
+	tasks        []domain.Task
+	listErr      error
+	checked      domain.UpdateState
+	checkErr     error
+	startedTask  domain.Task
+	startErr     error
+	startOptions service.UpdateStartOptions
 }
 
 type fakeClusterConfigService struct {
@@ -699,7 +751,8 @@ func (s fakeUpdateService) CheckNow(context.Context) (domain.UpdateState, error)
 	return s.checked, nil
 }
 
-func (s fakeUpdateService) Start(context.Context) (domain.Task, error) {
+func (s *fakeUpdateService) Start(_ context.Context, options service.UpdateStartOptions) (domain.Task, error) {
+	s.startOptions = options
 	if s.startErr != nil {
 		return domain.Task{}, s.startErr
 	}

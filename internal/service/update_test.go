@@ -13,7 +13,7 @@ import (
 func TestUpdateServiceInitializeCreatesMissingState(t *testing.T) {
 	ctx := context.Background()
 	repo := &fakeUpdateStateRepository{err: domain.ErrUpdateStateNotFound}
-	service := NewUpdateService(domain.ManagedLayout{}, &fakeInstallationStateRepository{}, repo, &fakeTaskRepository{}, &fakeTaskIDGenerator{}, &fakeUpdateVersionReader{})
+	service := NewUpdateService(domain.ManagedLayout{}, &fakeInstallationStateRepository{}, repo, &fakeTaskRepository{}, &fakeTaskIDGenerator{}, &fakeUpdateVersionReader{}, &fakeUpdateRuntimeController{})
 	now := time.Date(2026, 4, 27, 1, 0, 0, 0, time.UTC)
 	service.now = func() time.Time { return now }
 
@@ -44,7 +44,7 @@ func TestUpdateServiceCheckNowUpdatesVersionState(t *testing.T) {
 	service := NewUpdateService(domain.ManagedLayout{}, installs, updates, &fakeTaskRepository{}, &fakeTaskIDGenerator{}, &fakeUpdateVersionReader{
 		localVersion:  "100",
 		remoteVersion: "101",
-	})
+	}, &fakeUpdateRuntimeController{})
 	service.now = func() time.Time { return now }
 
 	state, err := service.CheckNow(ctx)
@@ -82,6 +82,7 @@ func TestUpdateServiceStartCreatesAndExecutesUpdateTask(t *testing.T) {
 	}
 	tasks := &fakeTaskRepository{}
 	reader := &fakeUpdateVersionReader{localVersion: "101"}
+	runtime := &fakeUpdateRuntimeController{}
 	service := NewUpdateService(
 		domain.ManagedLayout{Logs: "/srv/managed/logs"},
 		installs,
@@ -89,6 +90,7 @@ func TestUpdateServiceStartCreatesAndExecutesUpdateTask(t *testing.T) {
 		tasks,
 		&fakeTaskIDGenerator{ids: []domain.TaskID{"task-1"}},
 		reader,
+		runtime,
 	)
 	service.dispatch = func(fn func()) { fn() }
 	service.now = func() time.Time {
@@ -96,7 +98,7 @@ func TestUpdateServiceStartCreatesAndExecutesUpdateTask(t *testing.T) {
 		return now
 	}
 
-	task, err := service.Start(ctx)
+	task, err := service.Start(ctx, UpdateStartOptions{})
 	if err != nil {
 		t.Fatalf("Start() error = %v", err)
 	}
@@ -120,6 +122,9 @@ func TestUpdateServiceStartCreatesAndExecutesUpdateTask(t *testing.T) {
 	if updates.saved.UpdateAvailable {
 		t.Fatal("UpdateAvailable = true, want false after successful update")
 	}
+	if runtime.stopCalls != 0 {
+		t.Fatalf("stopCalls = %d, want 0", runtime.stopCalls)
+	}
 }
 
 func TestUpdateServiceStartRejectsWhenNoUpdateAvailable(t *testing.T) {
@@ -132,11 +137,83 @@ func TestUpdateServiceStartRejectsWhenNoUpdateAvailable(t *testing.T) {
 		&fakeTaskRepository{},
 		&fakeTaskIDGenerator{},
 		&fakeUpdateVersionReader{},
+		&fakeUpdateRuntimeController{},
 	)
 
-	_, err := service.Start(ctx)
+	_, err := service.Start(ctx, UpdateStartOptions{})
 	if !errors.Is(err, domain.ErrUpdateNotRequired) {
 		t.Fatalf("Start() error = %v, want %v", err, domain.ErrUpdateNotRequired)
+	}
+}
+
+func TestUpdateServiceStartRequiresStopConfirmationWhenRuntimeRunning(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 4, 27, 4, 30, 0, 0, time.UTC)
+	runtime := &fakeUpdateRuntimeController{
+		status: domain.RuntimeStatus{Status: domain.ServerStatusRunning},
+	}
+	service := NewUpdateService(
+		domain.ManagedLayout{},
+		&fakeInstallationStateRepository{state: domain.InstallationState{DSTInstalledAt: ptrTime(now)}},
+		&fakeUpdateStateRepository{state: domain.UpdateState{CurrentVersion: "100", LatestVersion: "101", UpdateAvailable: true}},
+		&fakeTaskRepository{},
+		&fakeTaskIDGenerator{},
+		&fakeUpdateVersionReader{},
+		runtime,
+	)
+
+	_, err := service.Start(ctx, UpdateStartOptions{})
+	if !errors.Is(err, domain.ErrUpdateRequiresServerStop) {
+		t.Fatalf("Start() error = %v, want %v", err, domain.ErrUpdateRequiresServerStop)
+	}
+	if runtime.stopCalls != 0 {
+		t.Fatalf("stopCalls = %d, want 0", runtime.stopCalls)
+	}
+}
+
+func TestUpdateServiceStartStopsRuntimeAfterConfirmation(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 4, 27, 5, 0, 0, 0, time.UTC)
+	updates := &fakeUpdateStateRepository{
+		state: domain.UpdateState{
+			CurrentVersion:  "100",
+			LatestVersion:   "101",
+			UpdateAvailable: true,
+			CreatedAt:       now.Add(-2 * time.Hour),
+			UpdatedAt:       now.Add(-time.Hour),
+		},
+	}
+	reader := &fakeUpdateVersionReader{localVersion: "101"}
+	runtime := &fakeUpdateRuntimeController{
+		status: domain.RuntimeStatus{Status: domain.ServerStatusRunning},
+	}
+	service := NewUpdateService(
+		domain.ManagedLayout{Logs: "/srv/managed/logs"},
+		&fakeInstallationStateRepository{state: domain.InstallationState{DSTInstalledAt: ptrTime(now.Add(-time.Hour))}},
+		updates,
+		&fakeTaskRepository{},
+		&fakeTaskIDGenerator{ids: []domain.TaskID{"task-2"}},
+		reader,
+		runtime,
+	)
+	service.dispatch = func(fn func()) { fn() }
+	service.now = func() time.Time {
+		now = now.Add(time.Minute)
+		return now
+	}
+
+	task, err := service.Start(ctx, UpdateStartOptions{AllowStop: true})
+	if err != nil {
+		t.Fatalf("Start() error = %v", err)
+	}
+	if task.ID != "task-2" {
+		t.Fatalf("task.ID = %q, want task-2", task.ID)
+	}
+	if runtime.stopCalls != 1 {
+		t.Fatalf("stopCalls = %d, want 1", runtime.stopCalls)
+	}
+	if updates.saved == nil || updates.saved.LastUpdatedAt == nil {
+		t.Fatalf("saved update state = %#v, want persisted update result", updates.saved)
 	}
 }
 
@@ -169,6 +246,25 @@ type fakeUpdateVersionReader struct {
 	updateResult  command.Result
 	updateErr     error
 	updateLogPath string
+}
+
+type fakeUpdateRuntimeController struct {
+	status    domain.RuntimeStatus
+	statusErr error
+	stopErr   error
+	stopCalls int
+}
+
+func (r *fakeUpdateRuntimeController) Status(context.Context) (domain.RuntimeStatus, error) {
+	if r.statusErr != nil {
+		return domain.RuntimeStatus{}, r.statusErr
+	}
+	return r.status, nil
+}
+
+func (r *fakeUpdateRuntimeController) Stop(context.Context) error {
+	r.stopCalls++
+	return r.stopErr
 }
 
 func (r *fakeUpdateVersionReader) LocalVersion(context.Context, domain.ManagedLayout) (string, error) {
