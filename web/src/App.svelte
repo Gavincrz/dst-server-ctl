@@ -8,6 +8,7 @@
     type ClusterConfig,
     type ClusterFormState
   } from './lib/clusterForm';
+  import { taskLogButtonLabel } from './lib/taskLogs';
 
   const installPollIntervalMs = 3000;
 
@@ -96,6 +97,10 @@
   let updateCheckLogsExpanded = false;
   let updateCheckLogsLoading = false;
   let updateCheckLogsError = '';
+  let installTaskLogs: Record<string, string[]> = {};
+  let installTaskLogLoading: Record<string, boolean> = {};
+  let installTaskLogErrors: Record<string, string> = {};
+  let expandedInstallTaskLogs: Record<string, boolean> = {};
   let updateTaskLogs: Record<string, string[]> = {};
   let updateTaskLogLoading: Record<string, boolean> = {};
   let updateTaskLogErrors: Record<string, string> = {};
@@ -453,17 +458,20 @@
     return 'Run Update';
   }
 
+  function installTaskLogButtonLabel(taskID: string) {
+    return taskLogButtonLabel({
+      loading: !!installTaskLogLoading[taskID],
+      expanded: !!expandedInstallTaskLogs[taskID],
+      hasLogs: taskID in installTaskLogs
+    });
+  }
+
   function updateTaskLogButtonLabel(taskID: string) {
-    if (updateTaskLogLoading[taskID]) {
-      return 'Loading Logs';
-    }
-    if (expandedUpdateTaskLogs[taskID]) {
-      return 'Hide Logs';
-    }
-    if (updateTaskLogs[taskID]) {
-      return 'Show Logs';
-    }
-    return 'View Logs';
+    return taskLogButtonLabel({
+      loading: !!updateTaskLogLoading[taskID],
+      expanded: !!expandedUpdateTaskLogs[taskID],
+      hasLogs: taskID in updateTaskLogs
+    });
   }
 
   function updateCheckLogButtonLabel() {
@@ -652,6 +660,37 @@
     }
 
     await loadUpdateTaskLogs(taskID);
+  }
+
+  async function toggleInstallTaskLogs(taskID: string) {
+    if (expandedInstallTaskLogs[taskID]) {
+      expandedInstallTaskLogs = { ...expandedInstallTaskLogs, [taskID]: false };
+      return;
+    }
+
+    expandedInstallTaskLogs = { ...expandedInstallTaskLogs, [taskID]: true };
+    if (installTaskLogs[taskID] || installTaskLogLoading[taskID]) {
+      return;
+    }
+
+    await loadInstallTaskLogs(taskID);
+  }
+
+  async function loadInstallTaskLogs(taskID: string) {
+    installTaskLogLoading = { ...installTaskLogLoading, [taskID]: true };
+    installTaskLogErrors = { ...installTaskLogErrors, [taskID]: '' };
+
+    try {
+      const payload = await fetchJSON<TaskLogResponse>(`/api/v1/install/tasks/${taskID}/logs?lines=160`);
+      installTaskLogs = { ...installTaskLogs, [taskID]: payload.lines };
+    } catch (err) {
+      installTaskLogErrors = {
+        ...installTaskLogErrors,
+        [taskID]: err instanceof Error ? err.message : 'Install task logs unavailable'
+      };
+    } finally {
+      installTaskLogLoading = { ...installTaskLogLoading, [taskID]: false };
+    }
   }
 
   async function loadUpdateTaskLogs(taskID: string) {
@@ -1454,8 +1493,25 @@
                   <dd>{formatDate(task.finishedAt)}</dd>
                 </div>
               </dl>
+              <div class="task-actions">
+                <button type="button" class="secondary-action" disabled={installTaskLogLoading[task.id]} on:click={() => toggleInstallTaskLogs(task.id)}>
+                  {installTaskLogButtonLabel(task.id)}
+                </button>
+                {#if expandedInstallTaskLogs[task.id]}
+                  <button type="button" class="secondary-action" disabled={installTaskLogLoading[task.id]} on:click={() => loadInstallTaskLogs(task.id)}>
+                    {installTaskLogLoading[task.id] ? 'Refreshing Logs' : 'Refresh Logs'}
+                  </button>
+                {/if}
+              </div>
               {#if task.error}
                 <p class="task-error">{task.error}</p>
+              {/if}
+              {#if expandedInstallTaskLogs[task.id]}
+                {#if installTaskLogErrors[task.id]}
+                  <p class="task-error">{installTaskLogErrors[task.id]}</p>
+                {:else}
+                  <pre class="log-output task-log-output">{installTaskLogs[task.id]?.length ? installTaskLogs[task.id].join('\n') : 'No log output recorded for this install task yet.'}</pre>
+                {/if}
               {/if}
             </article>
           {/each}
