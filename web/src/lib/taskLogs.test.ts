@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { expandedTaskIDs, taskLogButtonLabel } from './taskLogs';
+import { activeExpandedTaskIDs, expandedTaskIDs, taskLogButtonLabel } from './taskLogs';
 
 describe('taskLogButtonLabel', () => {
   it('shows loading while a request is in flight', () => {
@@ -30,5 +30,19 @@ describe('expandedTaskIDs', () => {
 
   it('ignores expanded ids that are not in the current task list', () => {
     expect(expandedTaskIDs({ 'task-1': true, missing: true }, [{ id: 'task-1' }])).toEqual(['task-1']);
+  });
+});
+
+describe('activeExpandedTaskIDs', () => {
+  it('returns only expanded tasks that are still active', () => {
+    expect(activeExpandedTaskIDs(
+      { 'task-1': true, 'task-2': true, 'task-3': true, 'task-4': false },
+      [
+        { id: 'task-1', status: 'running' },
+        { id: 'task-2', status: 'pending' },
+        { id: 'task-3', status: 'succeeded' },
+        { id: 'task-4', status: 'running' }
+      ]
+    )).toEqual(['task-1', 'task-2']);
   });
 });

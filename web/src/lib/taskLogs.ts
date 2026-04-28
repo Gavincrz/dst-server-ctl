@@ -6,6 +6,7 @@ type TaskLogButtonState = {
 
 type TaskLogTask = {
   id: string;
+  status?: string;
 };
 
 export function taskLogButtonLabel(state: TaskLogButtonState) {
@@ -23,4 +24,10 @@ export function taskLogButtonLabel(state: TaskLogButtonState) {
 
 export function expandedTaskIDs(expanded: Record<string, boolean>, tasks: TaskLogTask[]) {
   return tasks.filter((task) => expanded[task.id]).map((task) => task.id);
+}
+
+export function activeExpandedTaskIDs(expanded: Record<string, boolean>, tasks: TaskLogTask[]) {
+  return tasks
+    .filter((task) => expanded[task.id] && (task.status === 'pending' || task.status === 'running'))
+    .map((task) => task.id);
 }

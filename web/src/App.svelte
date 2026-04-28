@@ -8,7 +8,7 @@
     type ClusterConfig,
     type ClusterFormState
   } from './lib/clusterForm';
-  import { expandedTaskIDs, taskLogButtonLabel } from './lib/taskLogs';
+  import { activeExpandedTaskIDs, expandedTaskIDs, taskLogButtonLabel } from './lib/taskLogs';
 
   const installPollIntervalMs = 3000;
 
@@ -197,10 +197,10 @@
         clusterForm = clusterFormFromConfig(clusterConfig);
       }
 
-      if (expandedTaskIDs(expandedInstallTaskLogs, installTaskStatus).length > 0) {
+      if (activeExpandedTaskIDs(expandedInstallTaskLogs, installTaskStatus).length > 0) {
         await refreshInstallTaskLogs(installTaskStatus);
       }
-      if (expandedTaskIDs(expandedUpdateTaskLogs, updateTaskStatus).length > 0) {
+      if (activeExpandedTaskIDs(expandedUpdateTaskLogs, updateTaskStatus).length > 0) {
         await refreshUpdateTaskLogs(updateTaskStatus);
       }
 
@@ -702,7 +702,7 @@
   }
 
   async function refreshInstallTaskLogs(tasks: InstallationTask[]) {
-    const taskIDs = expandedTaskIDs(expandedInstallTaskLogs, tasks).filter((taskID) => !installTaskLogLoading[taskID]);
+    const taskIDs = activeExpandedTaskIDs(expandedInstallTaskLogs, tasks).filter((taskID) => !installTaskLogLoading[taskID]);
     if (taskIDs.length === 0) {
       return;
     }
@@ -739,7 +739,7 @@
   }
 
   async function refreshUpdateTaskLogs(tasks: InstallationTask[]) {
-    const taskIDs = expandedTaskIDs(expandedUpdateTaskLogs, tasks).filter((taskID) => !updateTaskLogLoading[taskID]);
+    const taskIDs = activeExpandedTaskIDs(expandedUpdateTaskLogs, tasks).filter((taskID) => !updateTaskLogLoading[taskID]);
     if (taskIDs.length === 0) {
       return;
     }
