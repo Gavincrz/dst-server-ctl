@@ -325,6 +325,7 @@ func TestInstallTaskLogsEndpoint(t *testing.T) {
 		Cluster:         fakeClusterConfigService{},
 		InstallTasks:    fakeInstallationTaskService{},
 		InstallTaskLogs: fakeInstallTaskLogService{lines: []string{"steamcmd: starting", "steamcmd: downloading"}},
+		UpdateTaskLogs:  fakeUpdateTaskLogService{},
 	})
 
 	request := httptest.NewRequest(nethttp.MethodGet, "/api/v1/install/tasks/task-1/logs?lines=50", nil)
@@ -341,6 +342,36 @@ func TestInstallTaskLogsEndpoint(t *testing.T) {
 	}
 	if payload.TaskID != "task-1" {
 		t.Fatalf("taskID = %q, want task-1", payload.TaskID)
+	}
+	if len(payload.Lines) != 2 {
+		t.Fatalf("line count = %d, want 2", len(payload.Lines))
+	}
+}
+
+func TestUpdateTaskLogsEndpoint(t *testing.T) {
+	router := NewRouter(testLogger(), Services{
+		Status:          fakeStatusReader{},
+		Installation:    fakeInstallationStatusReader{},
+		Cluster:         fakeClusterConfigService{},
+		InstallTasks:    fakeInstallationTaskService{},
+		InstallTaskLogs: fakeInstallTaskLogService{},
+		UpdateTaskLogs:  fakeUpdateTaskLogService{lines: []string{"steamcmd: updating", "steamcmd: validating"}},
+	})
+
+	request := httptest.NewRequest(nethttp.MethodGet, "/api/v1/update/tasks/task-2/logs?lines=50", nil)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	if response.Code != nethttp.StatusOK {
+		t.Fatalf("status = %d, want %d", response.Code, nethttp.StatusOK)
+	}
+
+	var payload taskLogResponse
+	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode response error = %v", err)
+	}
+	if payload.TaskID != "task-2" {
+		t.Fatalf("taskID = %q, want task-2", payload.TaskID)
 	}
 	if len(payload.Lines) != 2 {
 		t.Fatalf("line count = %d, want 2", len(payload.Lines))
@@ -711,6 +742,11 @@ type fakeInstallTaskLogService struct {
 	err   error
 }
 
+type fakeUpdateTaskLogService struct {
+	lines []string
+	err   error
+}
+
 type fakeRuntimeHistoryService struct {
 	events []domain.RuntimeEvent
 	err    error
@@ -800,6 +836,13 @@ func (s fakeRuntimeLogService) Get(context.Context, domain.ShardName, int) ([]st
 }
 
 func (s fakeInstallTaskLogService) Get(context.Context, domain.TaskID, int) ([]string, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return s.lines, nil
+}
+
+func (s fakeUpdateTaskLogService) Get(context.Context, domain.TaskID, int) ([]string, error) {
 	if s.err != nil {
 		return nil, s.err
 	}

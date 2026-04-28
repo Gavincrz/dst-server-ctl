@@ -82,6 +82,7 @@ func main() {
 		steamcmd.NewClient(command.ExecRunner{}),
 	)
 	installTaskLogService := service.NewInstallTaskLogService(layout, logtail.Reader{})
+	updateTaskLogService := service.NewUpdateTaskLogService(layout, logtail.Reader{})
 	runtimeLogService := service.NewRuntimeLogService(layout, logtail.Reader{})
 	runtimeHistoryService := service.NewRuntimeHistoryService(store)
 
@@ -94,6 +95,7 @@ func main() {
 			Cluster:         clusterService,
 			InstallTasks:    installRunnerService,
 			InstallTaskLogs: installTaskLogService,
+			UpdateTaskLogs:  updateTaskLogService,
 			Runtime:         runtimeService,
 			RuntimeLogs:     runtimeLogService,
 			RuntimeHistory:  runtimeHistoryService,

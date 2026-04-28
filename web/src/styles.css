@@ -639,6 +639,17 @@ dd {
   min-width: 0;
 }
 
+.task-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.task-log-output {
+  min-height: 10rem;
+  max-height: 18rem;
+}
+
 .task-error {
   border-radius: 6px;
   padding: 0.75rem 0.85rem;

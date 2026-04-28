@@ -21,6 +21,7 @@ type Services struct {
 	Cluster         ClusterConfigManager
 	InstallTasks    InstallationTaskService
 	InstallTaskLogs InstallTaskLogService
+	UpdateTaskLogs  UpdateTaskLogService
 	Runtime         RuntimeService
 	RuntimeLogs     RuntimeLogService
 	RuntimeHistory  RuntimeHistoryService
@@ -59,6 +60,10 @@ type RuntimeService interface {
 }
 
 type InstallTaskLogService interface {
+	Get(ctx context.Context, taskID domain.TaskID, maxLines int) ([]string, error)
+}
+
+type UpdateTaskLogService interface {
 	Get(ctx context.Context, taskID domain.TaskID, maxLines int) ([]string, error)
 }
 
@@ -258,6 +263,34 @@ func NewRouter(logger *slog.Logger, services Services) http.Handler {
 		if err != nil {
 			logger.Error("install task logs failed", "error", err, "taskID", r.PathValue("id"))
 			respondError(w, http.StatusInternalServerError, "install task logs unavailable")
+			return
+		}
+
+		respondJSON(w, taskLogResponse{
+			TaskID: r.PathValue("id"),
+			Lines:  entries,
+		})
+	})
+
+	mux.HandleFunc("GET /api/v1/update/tasks/{id}/logs", func(w http.ResponseWriter, r *http.Request) {
+		lines := 200
+		if value := r.URL.Query().Get("lines"); value != "" {
+			var parsed int
+			if _, err := fmt.Sscanf(value, "%d", &parsed); err != nil {
+				respondError(w, http.StatusBadRequest, "lines must be an integer")
+				return
+			}
+			lines = parsed
+		}
+
+		entries, err := services.UpdateTaskLogs.Get(r.Context(), domain.TaskID(r.PathValue("id")), lines)
+		if errors.Is(err, domain.ErrTaskNotFound) {
+			respondError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		if err != nil {
+			logger.Error("update task logs failed", "error", err, "taskID", r.PathValue("id"))
+			respondError(w, http.StatusInternalServerError, "update task logs unavailable")
 			return
 		}
 

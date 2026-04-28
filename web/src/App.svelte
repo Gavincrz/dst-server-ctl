@@ -66,6 +66,11 @@
     lines: string[];
   };
 
+  type TaskLogResponse = {
+    taskId: string;
+    lines: string[];
+  };
+
   type RuntimeHistoryEvent = {
     id: number;
     shard: string;
@@ -87,6 +92,10 @@
   let runtimeHistory: RuntimeHistoryEvent[] = [];
   let installTasks: InstallationTask[] = [];
   let updateTasks: InstallationTask[] = [];
+  let updateTaskLogs: Record<string, string[]> = {};
+  let updateTaskLogLoading: Record<string, boolean> = {};
+  let updateTaskLogErrors: Record<string, string> = {};
+  let expandedUpdateTaskLogs: Record<string, boolean> = {};
   let loading = true;
   let polling = false;
   let installSubmitting = false;
@@ -440,6 +449,19 @@
     return 'Run Update';
   }
 
+  function updateTaskLogButtonLabel(taskID: string) {
+    if (updateTaskLogLoading[taskID]) {
+      return 'Loading Logs';
+    }
+    if (expandedUpdateTaskLogs[taskID]) {
+      return 'Hide Logs';
+    }
+    if (updateTaskLogs[taskID]) {
+      return 'Show Logs';
+    }
+    return 'View Logs';
+  }
+
   function resetClusterForm() {
     if (!cluster) {
       return;
@@ -598,6 +620,37 @@
       updateError = err instanceof Error ? err.message : 'Update request failed';
     } finally {
       updateSubmitting = false;
+    }
+  }
+
+  async function toggleUpdateTaskLogs(taskID: string) {
+    if (expandedUpdateTaskLogs[taskID]) {
+      expandedUpdateTaskLogs = { ...expandedUpdateTaskLogs, [taskID]: false };
+      return;
+    }
+
+    expandedUpdateTaskLogs = { ...expandedUpdateTaskLogs, [taskID]: true };
+    if (updateTaskLogs[taskID] || updateTaskLogLoading[taskID]) {
+      return;
+    }
+
+    await loadUpdateTaskLogs(taskID);
+  }
+
+  async function loadUpdateTaskLogs(taskID: string) {
+    updateTaskLogLoading = { ...updateTaskLogLoading, [taskID]: true };
+    updateTaskLogErrors = { ...updateTaskLogErrors, [taskID]: '' };
+
+    try {
+      const payload = await fetchJSON<TaskLogResponse>(`/api/v1/update/tasks/${taskID}/logs?lines=160`);
+      updateTaskLogs = { ...updateTaskLogs, [taskID]: payload.lines };
+    } catch (err) {
+      updateTaskLogErrors = {
+        ...updateTaskLogErrors,
+        [taskID]: err instanceof Error ? err.message : 'Update task logs unavailable'
+      };
+    } finally {
+      updateTaskLogLoading = { ...updateTaskLogLoading, [taskID]: false };
     }
   }
 
@@ -904,8 +957,25 @@
                 <dd>{formatDate(task.finishedAt)}</dd>
               </div>
             </dl>
+            <div class="task-actions">
+              <button type="button" class="secondary-action" disabled={updateTaskLogLoading[task.id]} on:click={() => toggleUpdateTaskLogs(task.id)}>
+                {updateTaskLogButtonLabel(task.id)}
+              </button>
+              {#if expandedUpdateTaskLogs[task.id]}
+                <button type="button" class="secondary-action" disabled={updateTaskLogLoading[task.id]} on:click={() => loadUpdateTaskLogs(task.id)}>
+                  {updateTaskLogLoading[task.id] ? 'Refreshing Logs' : 'Refresh Logs'}
+                </button>
+              {/if}
+            </div>
             {#if task.error}
               <p class="task-error">{task.error}</p>
+            {/if}
+            {#if expandedUpdateTaskLogs[task.id]}
+              {#if updateTaskLogErrors[task.id]}
+                <p class="task-error">{updateTaskLogErrors[task.id]}</p>
+              {:else}
+                <pre class="log-output task-log-output">{updateTaskLogs[task.id]?.length ? updateTaskLogs[task.id].join('\n') : 'No log output recorded for this update task yet.'}</pre>
+              {/if}
             {/if}
           </article>
         {/each}
