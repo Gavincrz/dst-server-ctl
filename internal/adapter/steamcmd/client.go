@@ -56,3 +56,29 @@ func (c *Client) InstallDST(ctx context.Context, layout domain.ManagedLayout, lo
 	plan := InstallDSTPlan(layout)
 	return c.runner.RunWithOptions(ctx, command.StartOptions{StdoutPath: logPath, StderrPath: logPath}, plan.Name, plan.Args...)
 }
+
+func (c *Client) UpdateDST(ctx context.Context, layout domain.ManagedLayout, logPath string) (command.Result, error) {
+	return c.InstallDST(ctx, layout, logPath)
+}
+
+func (c *Client) LocalVersion(_ context.Context, layout domain.ManagedLayout) (string, error) {
+	version, err := ReadLocalVersion(layout)
+	if err != nil {
+		return "", fmt.Errorf("read local version: %w", err)
+	}
+	return version, nil
+}
+
+func (c *Client) RemoteVersion(ctx context.Context, layout domain.ManagedLayout) (string, command.Result, error) {
+	plan := RemoteVersionPlan(layout)
+	result, err := c.runner.Run(ctx, plan.Name, plan.Args...)
+	if err != nil {
+		return "", result, err
+	}
+
+	version, err := ParseRemoteVersion(result.Stdout)
+	if err != nil {
+		return "", result, err
+	}
+	return version, result, nil
+}

@@ -26,15 +26,15 @@
 - [x] 持久化更细的运行历史，并为意外退出补重试/告警策略。
 - [x] 修复安装任务轮询期间的 SQLite 并发锁问题，并按真实 DST Linux 64 位产物修正 shard 启动二进制路径。
 
-当前项目已有 harness、工程骨架、managed root 路径布局、共享 command runner、SQLite 状态存储基础层、启动时 managed root 初始化、安装状态 API、安装任务 API、任务模型、由任务驱动的 SteamCMD/DST 安装执行流程、初始化状态页、可反映控制器启动时间的基础运行状态、受管 cluster 的结构化配置状态和 `GET/PUT /api/v1/cluster` 读写 API、由该状态生成的基础 `cluster.ini` 与 shard `server.ini` 文件输出、接入 Web UI 的 cluster 配置表单/保存/重置和前端测试、基于 managed root `clusters/primary` 布局的 DST shard 启动命令生成与运行时启动 service、`GET /api/v1/runtime`、`POST /api/v1/runtime/start`、`POST /api/v1/runtime/stop`、`POST /api/v1/runtime/restart` 与对应的运行态 Web 控制面板、写入 `logs/master.log`/`logs/caves.log` 的 shard 日志落盘、最近日志读取 API 和日志展示面板、shard 异常退出后的自动状态清理与错误回传、基于启动时配置快照的 `restartRequired` 判定，以及持久化到 SQLite 的 runtime history 与一次自动重试策略。
+当前项目已有 harness、工程骨架、managed root 路径布局、共享 command runner、SQLite 状态存储基础层、启动时 managed root 初始化、安装状态 API、安装任务 API、任务模型、由任务驱动的 SteamCMD/DST 安装执行流程、初始化状态页、可反映控制器启动时间的基础运行状态、受管 cluster 的结构化配置状态和 `GET/PUT /api/v1/cluster` 读写 API、由该状态生成的基础 `cluster.ini` 与 shard `server.ini` 文件输出、接入 Web UI 的 cluster 配置表单/保存/重置和前端测试、基于 managed root `clusters/primary` 布局的 DST shard 启动命令生成与运行时启动 service、`GET /api/v1/runtime`、`POST /api/v1/runtime/start`、`POST /api/v1/runtime/stop`、`POST /api/v1/runtime/restart` 与对应的运行态 Web 控制面板、写入 `logs/master.log`/`logs/caves.log` 的 shard 日志落盘、最近日志读取 API 和日志展示面板、shard 异常退出后的自动状态清理与错误回传、基于启动时配置快照的 `restartRequired` 判定、持久化到 SQLite 的 runtime history 与一次自动重试策略，以及带有本地/远端版本比较、手动检查、手动更新和启动后定时检查的 DST 更新流程。
 
 ## 下一任务
 
-- [ ] 为更新流程补充手动执行、版本比较和定时检查。
+- [ ] 在更新流程可用后，为停服确认和运行中更新保护补 UI 与后端约束。
 
 ## 后续任务
 
-- [ ] 在更新流程可用后，为停服确认和运行中更新保护补 UI 与后端约束。
+- [ ] 为更新任务补充日志读取与失败排查入口。
 
 ## 暂时不要做
 

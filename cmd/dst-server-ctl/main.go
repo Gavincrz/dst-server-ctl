@@ -52,6 +52,19 @@ func main() {
 		os.Exit(1)
 	}
 	taskService := service.NewInstallTaskService(store, taskid.Generator{})
+	updateService := service.NewUpdateService(
+		layout,
+		store,
+		store,
+		store,
+		taskid.Generator{},
+		steamcmd.NewClient(command.ExecRunner{}),
+	)
+	if _, err := updateService.Initialize(ctx); err != nil {
+		logger.Error("update state initialization failed", "root", layout.Root, "error", err)
+		os.Exit(1)
+	}
+	updateService.StartPeriodicChecks(ctx, 0)
 	installRunnerService := service.NewInstallRunnerService(
 		layout,
 		store,
@@ -76,6 +89,7 @@ func main() {
 		Handler: apphttp.NewRouter(logger, apphttp.Services{
 			Status:          statusService,
 			Installation:    installationService,
+			Updates:         updateService,
 			Cluster:         clusterService,
 			InstallTasks:    installRunnerService,
 			InstallTaskLogs: installTaskLogService,

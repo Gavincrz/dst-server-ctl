@@ -56,6 +56,94 @@ func TestInstallationStatusEndpoint(t *testing.T) {
 	}
 }
 
+func TestUpdateStatusEndpoint(t *testing.T) {
+	checkedAt := time.Date(2026, 4, 27, 1, 0, 0, 0, time.UTC)
+	router := NewRouter(testLogger(), Services{
+		Status:       fakeStatusReader{},
+		Installation: fakeInstallationStatusReader{},
+		Updates: fakeUpdateService{
+			state: domain.UpdateState{
+				CurrentVersion:  "100",
+				LatestVersion:   "101",
+				UpdateAvailable: true,
+				LastCheckedAt:   &checkedAt,
+				CreatedAt:       checkedAt.Add(-time.Hour),
+				UpdatedAt:       checkedAt,
+			},
+		},
+		Cluster:      fakeClusterConfigService{},
+		InstallTasks: fakeInstallationTaskService{},
+	})
+
+	request := httptest.NewRequest(nethttp.MethodGet, "/api/v1/update", nil)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	if response.Code != nethttp.StatusOK {
+		t.Fatalf("status = %d, want %d", response.Code, nethttp.StatusOK)
+	}
+
+	var payload updateResponse
+	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode response error = %v", err)
+	}
+	if payload.CurrentVersion != "100" || payload.LatestVersion != "101" || !payload.UpdateAvailable {
+		t.Fatalf("payload = %#v, want update available state", payload)
+	}
+}
+
+func TestUpdateCheckEndpoint(t *testing.T) {
+	router := NewRouter(testLogger(), Services{
+		Status:       fakeStatusReader{},
+		Installation: fakeInstallationStatusReader{},
+		Updates: fakeUpdateService{
+			checked: domain.UpdateState{
+				CurrentVersion:  "100",
+				LatestVersion:   "101",
+				UpdateAvailable: true,
+			},
+		},
+		Cluster:      fakeClusterConfigService{},
+		InstallTasks: fakeInstallationTaskService{},
+	})
+
+	request := httptest.NewRequest(nethttp.MethodPost, "/api/v1/update/check", nil)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	if response.Code != nethttp.StatusOK {
+		t.Fatalf("status = %d, want %d", response.Code, nethttp.StatusOK)
+	}
+}
+
+func TestUpdateStartEndpoint(t *testing.T) {
+	createdAt := time.Date(2026, 4, 27, 2, 0, 0, 0, time.UTC)
+	router := NewRouter(testLogger(), Services{
+		Status:       fakeStatusReader{},
+		Installation: fakeInstallationStatusReader{},
+		Updates: fakeUpdateService{
+			startedTask: domain.Task{
+				ID:        "update-1",
+				Type:      domain.TaskTypeUpdateDST,
+				Status:    domain.TaskStatusPending,
+				Detail:    "Update DST",
+				CreatedAt: createdAt,
+				UpdatedAt: createdAt,
+			},
+		},
+		Cluster:      fakeClusterConfigService{},
+		InstallTasks: fakeInstallationTaskService{},
+	})
+
+	request := httptest.NewRequest(nethttp.MethodPost, "/api/v1/update/tasks", nil)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	if response.Code != nethttp.StatusAccepted {
+		t.Fatalf("status = %d, want %d", response.Code, nethttp.StatusAccepted)
+	}
+}
+
 func TestInstallationStatusEndpointReturnsNotFound(t *testing.T) {
 	router := NewRouter(testLogger(), Services{
 		Status:       fakeStatusReader{},
@@ -535,6 +623,17 @@ type fakeInstallationTaskService struct {
 	startErr     error
 }
 
+type fakeUpdateService struct {
+	state       domain.UpdateState
+	statusErr   error
+	tasks       []domain.Task
+	listErr     error
+	checked     domain.UpdateState
+	checkErr    error
+	startedTask domain.Task
+	startErr    error
+}
+
 type fakeClusterConfigService struct {
 	config    domain.ClusterConfig
 	getErr    error
@@ -577,6 +676,34 @@ func (s fakeInstallationTaskService) Start(context.Context) ([]domain.Task, erro
 		return nil, s.startErr
 	}
 	return s.startedTasks, nil
+}
+
+func (s fakeUpdateService) Status(context.Context) (domain.UpdateState, error) {
+	if s.statusErr != nil {
+		return domain.UpdateState{}, s.statusErr
+	}
+	return s.state, nil
+}
+
+func (s fakeUpdateService) ListTasks(context.Context) ([]domain.Task, error) {
+	if s.listErr != nil {
+		return nil, s.listErr
+	}
+	return s.tasks, nil
+}
+
+func (s fakeUpdateService) CheckNow(context.Context) (domain.UpdateState, error) {
+	if s.checkErr != nil {
+		return domain.UpdateState{}, s.checkErr
+	}
+	return s.checked, nil
+}
+
+func (s fakeUpdateService) Start(context.Context) (domain.Task, error) {
+	if s.startErr != nil {
+		return domain.Task{}, s.startErr
+	}
+	return s.startedTask, nil
 }
 
 func (s fakeClusterConfigService) Get(context.Context) (domain.ClusterConfig, error) {

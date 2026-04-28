@@ -37,6 +37,17 @@
     updatedAt: string;
   };
 
+  type UpdateStatus = {
+    currentVersion: string;
+    latestVersion: string;
+    updateAvailable: boolean;
+    lastCheckedAt?: string;
+    lastUpdatedAt?: string;
+    lastError?: string;
+    createdAt: string;
+    updatedAt: string;
+  };
+
   type RuntimeShardStatus = {
     name: string;
     running: boolean;
@@ -65,6 +76,7 @@
 
   let controller: ControllerStatus | null = null;
   let installation: InstallationStatus | null = null;
+  let updates: UpdateStatus | null = null;
   let cluster: ClusterConfig | null = null;
   let clusterForm: ClusterFormState | null = null;
   let runtime: RuntimeStatus | null = null;
@@ -74,16 +86,21 @@
   };
   let runtimeHistory: RuntimeHistoryEvent[] = [];
   let installTasks: InstallationTask[] = [];
+  let updateTasks: InstallationTask[] = [];
   let loading = true;
   let polling = false;
   let installSubmitting = false;
+  let updateSubmitting = false;
+  let updateCheckSubmitting = false;
   let clusterSubmitting = false;
   let runtimeSubmitting = false;
   let refreshError = '';
   let installError = '';
+  let updateError = '';
   let clusterError = '';
   let runtimeError = '';
   let actionMessage = '';
+  let updateMessage = '';
   let clusterMessage = '';
   let runtimeMessage = '';
   let refreshedAt: Date | null = null;
@@ -109,6 +126,10 @@
     return tasks.some((task) => task.status === 'pending' || task.status === 'running');
   }
 
+  function hasActiveUpdateTasks(tasks: InstallationTask[]) {
+    return tasks.some((task) => task.status === 'pending' || task.status === 'running');
+  }
+
   function latestTask(tasks: InstallationTask[]) {
     return tasks[0] ?? null;
   }
@@ -128,12 +149,14 @@
     refreshError = '';
 
     try {
-      const [controllerStatus, installationStatus, clusterConfig, runtimeStatus, tasks, masterLogs, cavesLogs, history] = await Promise.all([
+      const [controllerStatus, installationStatus, updateStatus, clusterConfig, runtimeStatus, installTaskStatus, updateTaskStatus, masterLogs, cavesLogs, history] = await Promise.all([
         fetchJSON<ControllerStatus>('/api/v1/status'),
         fetchJSON<InstallationStatus>('/api/v1/installation'),
+        fetchJSON<UpdateStatus>('/api/v1/update'),
         fetchJSON<ClusterConfig>('/api/v1/cluster'),
         fetchJSON<RuntimeStatus>('/api/v1/runtime'),
         fetchJSON<InstallationTask[]>('/api/v1/install/tasks'),
+        fetchJSON<InstallationTask[]>('/api/v1/update/tasks'),
         fetchJSON<RuntimeLogResponse>('/api/v1/runtime/logs?shard=Master&lines=120'),
         fetchJSON<RuntimeLogResponse>('/api/v1/runtime/logs?shard=Caves&lines=120'),
         fetchJSON<RuntimeHistoryEvent[]>('/api/v1/runtime/history?limit=12')
@@ -142,6 +165,7 @@
       const previousCluster = cluster;
       controller = controllerStatus;
       installation = installationStatus;
+      updates = updateStatus;
       cluster = clusterConfig;
       runtime = runtimeStatus;
       runtimeLogs = {
@@ -149,7 +173,8 @@
         Caves: cavesLogs.lines
       };
       runtimeHistory = history;
-      installTasks = tasks;
+      installTasks = installTaskStatus;
+      updateTasks = updateTaskStatus;
       if (!clusterForm || !previousCluster || !clusterFormIsDirty(clusterForm, previousCluster)) {
         clusterForm = clusterFormFromConfig(clusterConfig);
       }
@@ -228,6 +253,10 @@
     return status?.status === 'running';
   }
 
+  function updateVersionLabel(value?: string) {
+    return value && value.length > 0 ? value : 'Unknown';
+  }
+
   function runtimeActionLabel(status: RuntimeStatus | null) {
     if (runtimeSubmitting) {
       return runtimeRunning(status) ? 'Start Server' : 'Starting';
@@ -256,6 +285,10 @@
         return 'SteamCMD';
       case 'install_dst':
         return 'DST Dedicated Server';
+      case 'check_dst_update':
+        return 'Version Check';
+      case 'update_dst':
+        return 'DST Update';
       default:
         return type;
     }
@@ -360,6 +393,43 @@
     return 'Start Install';
   }
 
+  function updateHeading(status: UpdateStatus | null) {
+    if (!status) {
+      return 'Loading update status';
+    }
+    if (status.updateAvailable) {
+      return 'Update available for the managed DST install';
+    }
+    if (status.currentVersion && status.latestVersion && status.currentVersion === status.latestVersion) {
+      return 'Managed DST install is up to date';
+    }
+    return 'Version status has not been checked yet';
+  }
+
+  function updateMessageBody(status: UpdateStatus | null) {
+    if (!status) {
+      return 'Loading update details from the controller.';
+    }
+    if (status.lastError) {
+      return status.lastError;
+    }
+    if (status.updateAvailable) {
+      return `Local build ${updateVersionLabel(status.currentVersion)} is behind remote build ${updateVersionLabel(status.latestVersion)}.`;
+    }
+    if (status.currentVersion && status.latestVersion && status.currentVersion === status.latestVersion) {
+      return `Local build ${status.currentVersion} matches the latest remote build.`;
+    }
+    return 'Run a version check to compare the managed install against the latest DST dedicated server build.';
+  }
+
+  function canCheckUpdates(install: InstallationStatus | null, tasks: InstallationTask[]) {
+    return !!install?.dstInstalled && !hasActiveUpdateTasks(tasks) && !updateSubmitting && !updateCheckSubmitting;
+  }
+
+  function canStartUpdate(status: UpdateStatus | null, install: InstallationStatus | null, tasks: InstallationTask[]) {
+    return !!install?.dstInstalled && !!status?.updateAvailable && !hasActiveUpdateTasks(tasks) && !updateSubmitting && !updateCheckSubmitting;
+  }
+
   function resetClusterForm() {
     if (!cluster) {
       return;
@@ -437,6 +507,70 @@
       installError = err instanceof Error ? err.message : 'Install request failed';
     } finally {
       installSubmitting = false;
+    }
+  }
+
+  async function checkUpdates() {
+    updateCheckSubmitting = true;
+    updateError = '';
+    updateMessage = '';
+
+    try {
+      const response = await fetch('/api/v1/update/check', { method: 'POST' });
+      if (!response.ok) {
+        let message = `Update check returned HTTP ${response.status}`;
+        try {
+          const payload = (await response.json()) as { error?: string };
+          if (payload.error) {
+            message = payload.error;
+          }
+        } catch {
+          // Ignore JSON parse failures and keep the status-based message.
+        }
+        throw new Error(message);
+      }
+
+      updates = (await response.json()) as UpdateStatus;
+      updateMessage = updates.updateAvailable
+        ? 'Update check completed. A newer DST build is available.'
+        : 'Update check completed. The managed DST install is up to date.';
+      refreshedAt = new Date();
+      await refresh({ background: true });
+    } catch (err) {
+      updateError = err instanceof Error ? err.message : 'Update check failed';
+    } finally {
+      updateCheckSubmitting = false;
+    }
+  }
+
+  async function startUpdate() {
+    updateSubmitting = true;
+    updateError = '';
+    updateMessage = '';
+
+    try {
+      const response = await fetch('/api/v1/update/tasks', { method: 'POST' });
+      if (!response.ok) {
+        let message = `Update request returned HTTP ${response.status}`;
+        try {
+          const payload = (await response.json()) as { error?: string };
+          if (payload.error) {
+            message = payload.error;
+          }
+        } catch {
+          // Ignore JSON parse failures and keep the status-based message.
+        }
+        throw new Error(message);
+      }
+
+      const task = (await response.json()) as InstallationTask;
+      updateTasks = [task, ...updateTasks];
+      updateMessage = 'DST update started. Progress will refresh automatically.';
+      await refresh({ background: true });
+    } catch (err) {
+      updateError = err instanceof Error ? err.message : 'Update request failed';
+    } finally {
+      updateSubmitting = false;
     }
   }
 
@@ -535,7 +669,13 @@
 
     void refreshNow();
     pollTimer = setInterval(() => {
-      if ((!hasActiveInstallTasks(installTasks) && !runtimeRunning(runtime)) || installSubmitting || runtimeSubmitting) {
+      if (
+        (!hasActiveInstallTasks(installTasks) && !hasActiveUpdateTasks(updateTasks) && !runtimeRunning(runtime)) ||
+        installSubmitting ||
+        updateSubmitting ||
+        updateCheckSubmitting ||
+        runtimeSubmitting
+      ) {
         return;
       }
       void refresh({ background: true });
@@ -574,6 +714,13 @@
     </section>
   {/if}
 
+  {#if updateMessage}
+    <section class="notice notice-success" aria-live="polite">
+      <span>Updates</span>
+      <strong>{updateMessage}</strong>
+    </section>
+  {/if}
+
   {#if runtimeMessage}
     <section class="notice notice-success" aria-live="polite">
       <span>Runtime</span>
@@ -592,6 +739,13 @@
     <section class="notice" aria-live="polite">
       <span>Cluster Save Failed</span>
       <strong>{clusterError}</strong>
+    </section>
+  {/if}
+
+  {#if updateError}
+    <section class="notice" aria-live="polite">
+      <span>Update Request Failed</span>
+      <strong>{updateError}</strong>
     </section>
   {/if}
 
@@ -629,6 +783,109 @@
       <strong>{refreshedAt ? refreshedAt.toLocaleTimeString() : '-'}</strong>
       <small>{loading ? 'loading' : polling ? 'polling install progress' : 'current snapshot'}</small>
     </div>
+  </section>
+
+  <section class="panel panel-wide" aria-label="Updates">
+    <div class="panel-heading">
+      <div>
+        <h2>Updates</h2>
+        <p class="subtle">Compare the managed DST install against the latest upstream build and trigger a manual update when needed.</p>
+      </div>
+      <div class="panel-actions">
+        <button type="button" class="secondary-action" disabled={!canCheckUpdates(installation, updateTasks)} on:click={checkUpdates}>
+          {updateCheckSubmitting ? 'Checking' : 'Check Now'}
+        </button>
+        <button type="button" disabled={!canStartUpdate(updates, installation, updateTasks)} on:click={startUpdate}>
+          {updateSubmitting ? 'Starting Update' : 'Run Update'}
+        </button>
+      </div>
+    </div>
+
+    <div class="runtime-layout">
+      <div class="runtime-hero">
+        <div class="runtime-copy">
+          <span class={`badge badge-${updates?.updateAvailable ? 'failed' : 'succeeded'}`}>
+            {updates?.updateAvailable ? 'Update Available' : 'Checked'}
+          </span>
+          <h3>{updateHeading(updates)}</h3>
+          <p>{updateMessageBody(updates)}</p>
+          {#if updates?.lastError}
+            <p class="task-error">{updates.lastError}</p>
+          {/if}
+        </div>
+        <div class="runtime-meta">
+          <article class="checkpoint" class:complete={!!installation?.dstInstalled}>
+            <strong>DST Installed</strong>
+            <span>{installation ? boolLabel(installation.dstInstalled) : 'Loading'}</span>
+          </article>
+          <article class="checkpoint" class:complete={!updates?.updateAvailable && !!updates?.latestVersion}>
+            <strong>Latest Check</strong>
+            <span>{formatDate(updates?.lastCheckedAt)}</span>
+          </article>
+        </div>
+      </div>
+
+      <div class="task-meta">
+        <div>
+          <dt>Current Build</dt>
+          <dd>{updateVersionLabel(updates?.currentVersion)}</dd>
+        </div>
+        <div>
+          <dt>Latest Build</dt>
+          <dd>{updateVersionLabel(updates?.latestVersion)}</dd>
+        </div>
+        <div>
+          <dt>Last Checked</dt>
+          <dd>{formatDate(updates?.lastCheckedAt)}</dd>
+        </div>
+        <div>
+          <dt>Last Updated</dt>
+          <dd>{formatDate(updates?.lastUpdatedAt)}</dd>
+        </div>
+      </div>
+    </div>
+
+    {#if updateTasks.length > 0}
+      <div class="task-list">
+        {#each updateTasks as task}
+          <article class={`task task-${task.status}`}>
+            <div class="task-head">
+              <div>
+                <strong>{taskTypeLabel(task.type)}</strong>
+                <small>{task.detail}</small>
+              </div>
+              <span class={`badge badge-${task.status}`}>{taskStatusLabel(task.status)}</span>
+            </div>
+            <dl class="task-meta">
+              <div>
+                <dt>ID</dt>
+                <dd>{task.id}</dd>
+              </div>
+              <div>
+                <dt>Created</dt>
+                <dd>{formatDate(task.createdAt)}</dd>
+              </div>
+              <div>
+                <dt>Started</dt>
+                <dd>{formatDate(task.startedAt)}</dd>
+              </div>
+              <div>
+                <dt>Finished</dt>
+                <dd>{formatDate(task.finishedAt)}</dd>
+              </div>
+            </dl>
+            {#if task.error}
+              <p class="task-error">{task.error}</p>
+            {/if}
+          </article>
+        {/each}
+      </div>
+    {:else}
+      <div class="empty-state">
+        <strong>No update tasks yet</strong>
+        <p>Use Check Now to compare versions, then start a manual update when a newer build is available.</p>
+      </div>
+    {/if}
   </section>
 
   <section class="panel panel-wide" aria-label="Runtime control">

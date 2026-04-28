@@ -6,11 +6,14 @@ import (
 )
 
 var ErrInstallationStateNotFound = errors.New("installation state not found")
+var ErrUpdateStateNotFound = errors.New("update state not found")
 var ErrClusterConfigNotFound = errors.New("cluster config not found")
 var ErrInvalidClusterConfig = errors.New("invalid cluster config")
 var ErrTaskNotFound = errors.New("task not found")
 var ErrInstallAlreadyInProgress = errors.New("install already in progress")
 var ErrInstallNotRequired = errors.New("install not required")
+var ErrUpdateAlreadyInProgress = errors.New("update already in progress")
+var ErrUpdateNotRequired = errors.New("update not required")
 var ErrDSTNotInstalled = errors.New("dst not installed")
 var ErrServerAlreadyRunning = errors.New("server already running")
 var ErrServerNotRunning = errors.New("server not running")
@@ -84,6 +87,17 @@ type InstallationState struct {
 	UpdatedAt           time.Time
 }
 
+type UpdateState struct {
+	CurrentVersion  string
+	LatestVersion   string
+	UpdateAvailable bool
+	LastCheckedAt   *time.Time
+	LastUpdatedAt   *time.Time
+	LastError       string
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
 type ClusterConfig struct {
 	ClusterName        string
 	ClusterDescription string
@@ -109,6 +123,8 @@ type TaskType string
 const (
 	TaskTypeInstallSteamCMD TaskType = "install_steamcmd"
 	TaskTypeInstallDST      TaskType = "install_dst"
+	TaskTypeUpdateCheckDST  TaskType = "check_dst_update"
+	TaskTypeUpdateDST       TaskType = "update_dst"
 )
 
 type TaskStatus string

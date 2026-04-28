@@ -16,6 +16,7 @@ import (
 type Services struct {
 	Status          StatusReader
 	Installation    InstallationStatusReader
+	Updates         UpdateService
 	Cluster         ClusterConfigManager
 	InstallTasks    InstallationTaskService
 	InstallTaskLogs InstallTaskLogService
@@ -30,6 +31,13 @@ type StatusReader interface {
 
 type InstallationStatusReader interface {
 	Status(ctx context.Context) (domain.InstallationState, error)
+}
+
+type UpdateService interface {
+	Status(ctx context.Context) (domain.UpdateState, error)
+	ListTasks(ctx context.Context) ([]domain.Task, error)
+	CheckNow(ctx context.Context) (domain.UpdateState, error)
+	Start(ctx context.Context) (domain.Task, error)
 }
 
 type InstallationTaskService interface {
@@ -81,6 +89,72 @@ func NewRouter(logger *slog.Logger, services Services) http.Handler {
 		}
 
 		respondJSON(w, installationResponseFromDomain(state))
+	})
+
+	mux.HandleFunc("GET /api/v1/update", func(w http.ResponseWriter, r *http.Request) {
+		state, err := services.Updates.Status(r.Context())
+		if errors.Is(err, domain.ErrUpdateStateNotFound) {
+			respondError(w, http.StatusNotFound, "update state not initialized")
+			return
+		}
+		if err != nil {
+			logger.Error("update status failed", "error", err)
+			respondError(w, http.StatusInternalServerError, "update status unavailable")
+			return
+		}
+
+		respondJSON(w, updateResponseFromDomain(state))
+	})
+
+	mux.HandleFunc("POST /api/v1/update/check", func(w http.ResponseWriter, r *http.Request) {
+		state, err := services.Updates.CheckNow(r.Context())
+		switch {
+		case errors.Is(err, domain.ErrDSTNotInstalled):
+			respondError(w, http.StatusConflict, "dst is not installed")
+			return
+		case errors.Is(err, domain.ErrUpdateAlreadyInProgress):
+			respondError(w, http.StatusConflict, "update already in progress")
+			return
+		case err != nil:
+			logger.Error("update check failed", "error", err)
+			respondError(w, http.StatusInternalServerError, "update check failed")
+			return
+		}
+
+		respondJSON(w, updateResponseFromDomain(state))
+	})
+
+	mux.HandleFunc("GET /api/v1/update/tasks", func(w http.ResponseWriter, r *http.Request) {
+		tasks, err := services.Updates.ListTasks(r.Context())
+		if err != nil {
+			logger.Error("list update tasks failed", "error", err)
+			respondError(w, http.StatusInternalServerError, "update tasks unavailable")
+			return
+		}
+
+		respondJSON(w, taskListResponseFromDomain(tasks))
+	})
+
+	mux.HandleFunc("POST /api/v1/update/tasks", func(w http.ResponseWriter, r *http.Request) {
+		task, err := services.Updates.Start(r.Context())
+		switch {
+		case errors.Is(err, domain.ErrDSTNotInstalled):
+			respondError(w, http.StatusConflict, "dst is not installed")
+			return
+		case errors.Is(err, domain.ErrUpdateAlreadyInProgress):
+			respondError(w, http.StatusConflict, "update already in progress")
+			return
+		case errors.Is(err, domain.ErrUpdateNotRequired):
+			respondError(w, http.StatusConflict, "update not required")
+			return
+		case err != nil:
+			logger.Error("start update failed", "error", err)
+			respondError(w, http.StatusInternalServerError, "update start failed")
+			return
+		}
+
+		w.WriteHeader(http.StatusAccepted)
+		respondJSON(w, taskResponseFromDomain(task))
 	})
 
 	mux.HandleFunc("GET /api/v1/install/tasks", func(w http.ResponseWriter, r *http.Request) {
@@ -359,6 +433,17 @@ type taskResponse struct {
 	UpdatedAt  time.Time  `json:"updatedAt"`
 }
 
+type updateResponse struct {
+	CurrentVersion  string     `json:"currentVersion"`
+	LatestVersion   string     `json:"latestVersion"`
+	UpdateAvailable bool       `json:"updateAvailable"`
+	LastCheckedAt   *time.Time `json:"lastCheckedAt,omitempty"`
+	LastUpdatedAt   *time.Time `json:"lastUpdatedAt,omitempty"`
+	LastError       string     `json:"lastError,omitempty"`
+	CreatedAt       time.Time  `json:"createdAt"`
+	UpdatedAt       time.Time  `json:"updatedAt"`
+}
+
 type clusterResponse struct {
 	ClusterName        string          `json:"clusterName"`
 	ClusterDescription string          `json:"clusterDescription"`
@@ -437,19 +522,36 @@ func installationResponseFromDomain(state domain.InstallationState) installation
 func taskListResponseFromDomain(tasks []domain.Task) []taskResponse {
 	response := make([]taskResponse, 0, len(tasks))
 	for _, task := range tasks {
-		response = append(response, taskResponse{
-			ID:         string(task.ID),
-			Type:       string(task.Type),
-			Status:     string(task.Status),
-			Detail:     task.Detail,
-			Error:      task.Error,
-			StartedAt:  task.StartedAt,
-			FinishedAt: task.FinishedAt,
-			CreatedAt:  task.CreatedAt,
-			UpdatedAt:  task.UpdatedAt,
-		})
+		response = append(response, taskResponseFromDomain(task))
 	}
 	return response
+}
+
+func taskResponseFromDomain(task domain.Task) taskResponse {
+	return taskResponse{
+		ID:         string(task.ID),
+		Type:       string(task.Type),
+		Status:     string(task.Status),
+		Detail:     task.Detail,
+		Error:      task.Error,
+		StartedAt:  task.StartedAt,
+		FinishedAt: task.FinishedAt,
+		CreatedAt:  task.CreatedAt,
+		UpdatedAt:  task.UpdatedAt,
+	}
+}
+
+func updateResponseFromDomain(state domain.UpdateState) updateResponse {
+	return updateResponse{
+		CurrentVersion:  state.CurrentVersion,
+		LatestVersion:   state.LatestVersion,
+		UpdateAvailable: state.UpdateAvailable,
+		LastCheckedAt:   state.LastCheckedAt,
+		LastUpdatedAt:   state.LastUpdatedAt,
+		LastError:       state.LastError,
+		CreatedAt:       state.CreatedAt,
+		UpdatedAt:       state.UpdatedAt,
+	}
 }
 
 func clusterResponseFromDomain(config domain.ClusterConfig) clusterResponse {

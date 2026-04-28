@@ -3,6 +3,7 @@ package steamcmd
 import (
 	"context"
 	"errors"
+	"os"
 	"reflect"
 	"testing"
 
@@ -101,6 +102,48 @@ func TestClientInstallDSTUsesCommandRunner(t *testing.T) {
 	}
 }
 
+func TestClientRemoteVersionUsesCommandRunner(t *testing.T) {
+	runner := &fakeRunner{
+		results: []command.Result{
+			{Stdout: `"branches" { "public" { "buildid" "987654" } }`},
+		},
+	}
+	client := NewClient(runner)
+
+	version, _, err := client.RemoteVersion(context.Background(), domain.ManagedLayout{
+		SteamCMD: "/srv/managed/steamcmd",
+	})
+	if err != nil {
+		t.Fatalf("RemoteVersion() error = %v", err)
+	}
+	if version != "987654" {
+		t.Fatalf("version = %q, want 987654", version)
+	}
+	if len(runner.calls) != 1 {
+		t.Fatalf("call count = %d, want 1", len(runner.calls))
+	}
+}
+
+func TestClientLocalVersionReadsManifest(t *testing.T) {
+	root := t.TempDir()
+	layout := domain.ManagedLayout{SteamCMD: root}
+	if err := os.MkdirAll(root+"/steamapps", 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(LocalManifestPath(layout), []byte(`"AppState" { "buildid" "24680" }`), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	client := NewClient(&fakeRunner{})
+	version, err := client.LocalVersion(context.Background(), layout)
+	if err != nil {
+		t.Fatalf("LocalVersion() error = %v", err)
+	}
+	if version != "24680" {
+		t.Fatalf("version = %q, want 24680", version)
+	}
+}
+
 type fakeRunnerCall struct {
 	name    string
 	args    []string
@@ -108,8 +151,9 @@ type fakeRunnerCall struct {
 }
 
 type fakeRunner struct {
-	calls []fakeRunnerCall
-	errs  []error
+	calls   []fakeRunnerCall
+	errs    []error
+	results []command.Result
 }
 
 func (r *fakeRunner) Run(_ context.Context, name string, args ...string) (command.Result, error) {
@@ -118,12 +162,17 @@ func (r *fakeRunner) Run(_ context.Context, name string, args ...string) (comman
 
 func (r *fakeRunner) RunWithOptions(_ context.Context, options command.StartOptions, name string, args ...string) (command.Result, error) {
 	r.calls = append(r.calls, fakeRunnerCall{name: name, args: args, options: options})
+	var result command.Result
+	if len(r.results) > 0 {
+		result = r.results[0]
+		r.results = r.results[1:]
+	}
 	if len(r.errs) == 0 {
-		return command.Result{}, nil
+		return result, nil
 	}
 	err := r.errs[0]
 	r.errs = r.errs[1:]
-	return command.Result{}, err
+	return result, err
 }
 
 func (r *fakeRunner) Start(context.Context, string, ...string) (command.Process, error) {

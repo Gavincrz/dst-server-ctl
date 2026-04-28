@@ -109,6 +109,74 @@ ON CONFLICT(id) DO UPDATE SET
 	return nil
 }
 
+func (s *Store) GetUpdateState(ctx context.Context) (domain.UpdateState, error) {
+	var row updateStateRow
+	err := s.db.QueryRowContext(ctx, `
+SELECT current_version, latest_version, update_available, last_checked_at, last_updated_at, last_error, created_at, updated_at
+FROM update_state
+WHERE id = 1`).Scan(
+		&row.CurrentVersion,
+		&row.LatestVersion,
+		&row.UpdateAvailable,
+		&row.LastCheckedAt,
+		&row.LastUpdatedAt,
+		&row.LastError,
+		&row.CreatedAt,
+		&row.UpdatedAt,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return domain.UpdateState{}, domain.ErrUpdateStateNotFound
+	}
+	if err != nil {
+		return domain.UpdateState{}, fmt.Errorf("get update state: %w", err)
+	}
+
+	state, err := row.toDomain()
+	if err != nil {
+		return domain.UpdateState{}, err
+	}
+
+	return state, nil
+}
+
+func (s *Store) SaveUpdateState(ctx context.Context, state domain.UpdateState) error {
+	row := updateStateRowFromDomain(state)
+	_, err := s.db.ExecContext(ctx, `
+INSERT INTO update_state (
+	id,
+	current_version,
+	latest_version,
+	update_available,
+	last_checked_at,
+	last_updated_at,
+	last_error,
+	created_at,
+	updated_at
+) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(id) DO UPDATE SET
+	current_version = excluded.current_version,
+	latest_version = excluded.latest_version,
+	update_available = excluded.update_available,
+	last_checked_at = excluded.last_checked_at,
+	last_updated_at = excluded.last_updated_at,
+	last_error = excluded.last_error,
+	updated_at = excluded.updated_at`,
+		row.CurrentVersion,
+		row.LatestVersion,
+		row.UpdateAvailable,
+		row.LastCheckedAt,
+		row.LastUpdatedAt,
+		row.LastError,
+		row.CreatedAt,
+		row.UpdatedAt,
+	)
+	if err != nil {
+		return fmt.Errorf("save update state: %w", err)
+	}
+
+	return nil
+}
+
 func (s *Store) GetClusterConfig(ctx context.Context) (domain.ClusterConfig, error) {
 	var row clusterConfigRow
 	err := s.db.QueryRowContext(ctx, `
@@ -389,6 +457,17 @@ type installationStateRow struct {
 	UpdatedAt           string
 }
 
+type updateStateRow struct {
+	CurrentVersion  string
+	LatestVersion   string
+	UpdateAvailable bool
+	LastCheckedAt   sql.NullString
+	LastUpdatedAt   sql.NullString
+	LastError       string
+	CreatedAt       string
+	UpdatedAt       string
+}
+
 func installationStateRowFromDomain(state domain.InstallationState) installationStateRow {
 	return installationStateRow{
 		ManagedRoot:         state.ManagedRoot,
@@ -424,6 +503,49 @@ func (r installationStateRow) toDomain() (domain.InstallationState, error) {
 		DSTInstalledAt:      dstInstalledAt,
 		CreatedAt:           createdAt,
 		UpdatedAt:           updatedAt,
+	}, nil
+}
+
+func updateStateRowFromDomain(state domain.UpdateState) updateStateRow {
+	return updateStateRow{
+		CurrentVersion:  state.CurrentVersion,
+		LatestVersion:   state.LatestVersion,
+		UpdateAvailable: state.UpdateAvailable,
+		LastCheckedAt:   nullableTime(state.LastCheckedAt),
+		LastUpdatedAt:   nullableTime(state.LastUpdatedAt),
+		LastError:       state.LastError,
+		CreatedAt:       state.CreatedAt.UTC().Format(timeFormat),
+		UpdatedAt:       state.UpdatedAt.UTC().Format(timeFormat),
+	}
+}
+
+func (r updateStateRow) toDomain() (domain.UpdateState, error) {
+	createdAt, err := parseRequiredTime("created_at", r.CreatedAt)
+	if err != nil {
+		return domain.UpdateState{}, err
+	}
+	updatedAt, err := parseRequiredTime("updated_at", r.UpdatedAt)
+	if err != nil {
+		return domain.UpdateState{}, err
+	}
+	lastCheckedAt, err := parseNullableTime("last_checked_at", r.LastCheckedAt)
+	if err != nil {
+		return domain.UpdateState{}, err
+	}
+	lastUpdatedAt, err := parseNullableTime("last_updated_at", r.LastUpdatedAt)
+	if err != nil {
+		return domain.UpdateState{}, err
+	}
+
+	return domain.UpdateState{
+		CurrentVersion:  r.CurrentVersion,
+		LatestVersion:   r.LatestVersion,
+		UpdateAvailable: r.UpdateAvailable,
+		LastCheckedAt:   lastCheckedAt,
+		LastUpdatedAt:   lastUpdatedAt,
+		LastError:       r.LastError,
+		CreatedAt:       createdAt,
+		UpdatedAt:       updatedAt,
 	}, nil
 }
 

@@ -11,6 +11,11 @@ type InstallationStateRepository interface {
 	SaveInstallationState(ctx context.Context, state domain.InstallationState) error
 }
 
+type UpdateStateRepository interface {
+	GetUpdateState(ctx context.Context) (domain.UpdateState, error)
+	SaveUpdateState(ctx context.Context, state domain.UpdateState) error
+}
+
 type ClusterConfigRepository interface {
 	GetClusterConfig(ctx context.Context) (domain.ClusterConfig, error)
 	SaveClusterConfig(ctx context.Context, config domain.ClusterConfig) error

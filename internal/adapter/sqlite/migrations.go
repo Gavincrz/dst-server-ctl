@@ -81,6 +81,22 @@ CREATE TABLE runtime_events (
 
 CREATE INDEX runtime_events_created_at_idx ON runtime_events(created_at DESC, id DESC);`,
 	},
+	{
+		Version: 5,
+		Name:    "create_update_state",
+		SQL: `
+CREATE TABLE update_state (
+	id INTEGER PRIMARY KEY CHECK (id = 1),
+	current_version TEXT NOT NULL,
+	latest_version TEXT NOT NULL,
+	update_available INTEGER NOT NULL,
+	last_checked_at TEXT,
+	last_updated_at TEXT,
+	last_error TEXT NOT NULL,
+	created_at TEXT NOT NULL,
+	updated_at TEXT NOT NULL
+);`,
+	},
 }
 
 func Migrate(ctx context.Context, db *sql.DB) error {

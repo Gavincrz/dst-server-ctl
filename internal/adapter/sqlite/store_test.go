@@ -164,6 +164,54 @@ func TestGetInstallationStateReturnsNotFound(t *testing.T) {
 	}
 }
 
+func TestUpdateStateRepositoryRoundTripsState(t *testing.T) {
+	ctx := context.Background()
+	store := openTestStore(t, ctx)
+	defer store.Close()
+
+	checkedAt := time.Date(2026, 4, 27, 5, 0, 0, 0, time.UTC)
+	updatedAt := checkedAt.Add(time.Hour)
+	state := domain.UpdateState{
+		CurrentVersion:  "100",
+		LatestVersion:   "101",
+		UpdateAvailable: true,
+		LastCheckedAt:   &checkedAt,
+		LastUpdatedAt:   &updatedAt,
+		LastError:       "",
+		CreatedAt:       checkedAt.Add(-time.Hour),
+		UpdatedAt:       updatedAt,
+	}
+
+	if err := store.SaveUpdateState(ctx, state); err != nil {
+		t.Fatalf("SaveUpdateState() error = %v", err)
+	}
+
+	got, err := store.GetUpdateState(ctx)
+	if err != nil {
+		t.Fatalf("GetUpdateState() error = %v", err)
+	}
+	if got.CurrentVersion != state.CurrentVersion || got.LatestVersion != state.LatestVersion {
+		t.Fatalf("versions = %#v, want %#v", got, state)
+	}
+	if !got.UpdateAvailable {
+		t.Fatal("UpdateAvailable = false, want true")
+	}
+	if got.LastCheckedAt == nil || !got.LastCheckedAt.Equal(checkedAt) {
+		t.Fatalf("LastCheckedAt = %v, want %v", got.LastCheckedAt, checkedAt)
+	}
+}
+
+func TestGetUpdateStateReturnsNotFound(t *testing.T) {
+	ctx := context.Background()
+	store := openTestStore(t, ctx)
+	defer store.Close()
+
+	_, err := store.GetUpdateState(ctx)
+	if !errors.Is(err, domain.ErrUpdateStateNotFound) {
+		t.Fatalf("GetUpdateState() error = %v, want ErrUpdateStateNotFound", err)
+	}
+}
+
 func TestClusterConfigRepositoryRoundTripsConfig(t *testing.T) {
 	ctx := context.Background()
 	store := openTestStore(t, ctx)
