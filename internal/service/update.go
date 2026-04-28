@@ -17,7 +17,7 @@ const updateCheckInterval = 6 * time.Hour
 
 type UpdateVersionReader interface {
 	LocalVersion(ctx context.Context, layout domain.ManagedLayout) (string, error)
-	RemoteVersion(ctx context.Context, layout domain.ManagedLayout) (string, command.Result, error)
+	RemoteVersion(ctx context.Context, layout domain.ManagedLayout, logPath string) (string, command.Result, error)
 	UpdateDST(ctx context.Context, layout domain.ManagedLayout, logPath string) (command.Result, error)
 }
 
@@ -232,7 +232,7 @@ func (s *UpdateService) checkNowLocked(ctx context.Context) (domain.UpdateState,
 		return domain.UpdateState{}, s.saveCheckFailure(ctx, state, err)
 	}
 
-	latestVersion, result, err := s.reader.RemoteVersion(ctx, s.layout)
+	latestVersion, result, err := s.reader.RemoteVersion(ctx, s.layout, updateCheckLogPath(s.layout))
 	if err != nil {
 		return domain.UpdateState{}, s.saveCheckFailure(ctx, state, updateCommandError("check_dst_update", result, err))
 	}
@@ -386,6 +386,10 @@ func isUpdateTask(taskType domain.TaskType) bool {
 
 func updateTaskLogPath(layout domain.ManagedLayout, taskID domain.TaskID) string {
 	return filepath.Join(layout.Logs, "update-"+string(taskID)+".log")
+}
+
+func updateCheckLogPath(layout domain.ManagedLayout) string {
+	return filepath.Join(layout.Logs, "update-check.log")
 }
 
 func updateCommandError(label string, result command.Result, err error) error {

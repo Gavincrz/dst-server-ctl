@@ -21,6 +21,7 @@ type Services struct {
 	Cluster         ClusterConfigManager
 	InstallTasks    InstallationTaskService
 	InstallTaskLogs InstallTaskLogService
+	UpdateCheckLogs UpdateCheckLogService
 	UpdateTaskLogs  UpdateTaskLogService
 	Runtime         RuntimeService
 	RuntimeLogs     RuntimeLogService
@@ -65,6 +66,10 @@ type InstallTaskLogService interface {
 
 type UpdateTaskLogService interface {
 	Get(ctx context.Context, taskID domain.TaskID, maxLines int) ([]string, error)
+}
+
+type UpdateCheckLogService interface {
+	Get(ctx context.Context, maxLines int) ([]string, error)
 }
 
 type RuntimeLogService interface {
@@ -139,6 +144,30 @@ func NewRouter(logger *slog.Logger, services Services) http.Handler {
 		}
 
 		respondJSON(w, taskListResponseFromDomain(tasks))
+	})
+
+	mux.HandleFunc("GET /api/v1/update/check/logs", func(w http.ResponseWriter, r *http.Request) {
+		lines := 200
+		if value := r.URL.Query().Get("lines"); value != "" {
+			var parsed int
+			if _, err := fmt.Sscanf(value, "%d", &parsed); err != nil {
+				respondError(w, http.StatusBadRequest, "lines must be an integer")
+				return
+			}
+			lines = parsed
+		}
+
+		entries, err := services.UpdateCheckLogs.Get(r.Context(), lines)
+		if err != nil {
+			logger.Error("update check logs failed", "error", err)
+			respondError(w, http.StatusInternalServerError, "update check logs unavailable")
+			return
+		}
+
+		respondJSON(w, taskLogResponse{
+			TaskID: "update-check",
+			Lines:  entries,
+		})
 	})
 
 	mux.HandleFunc("POST /api/v1/update/tasks", func(w http.ResponseWriter, r *http.Request) {

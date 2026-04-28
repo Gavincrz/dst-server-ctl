@@ -112,7 +112,7 @@ func TestClientRemoteVersionUsesCommandRunner(t *testing.T) {
 
 	version, _, err := client.RemoteVersion(context.Background(), domain.ManagedLayout{
 		SteamCMD: "/srv/managed/steamcmd",
-	})
+	}, "/srv/managed/logs/update-check.log")
 	if err != nil {
 		t.Fatalf("RemoteVersion() error = %v", err)
 	}
@@ -121,6 +121,9 @@ func TestClientRemoteVersionUsesCommandRunner(t *testing.T) {
 	}
 	if len(runner.calls) != 1 {
 		t.Fatalf("call count = %d, want 1", len(runner.calls))
+	}
+	if runner.calls[0].options.StdoutPath != "/srv/managed/logs/update-check.log" || runner.calls[0].options.StderrPath != "/srv/managed/logs/update-check.log" {
+		t.Fatalf("log paths = %#v, want update check log", runner.calls[0].options)
 	}
 }
 

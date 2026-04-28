@@ -92,6 +92,10 @@
   let runtimeHistory: RuntimeHistoryEvent[] = [];
   let installTasks: InstallationTask[] = [];
   let updateTasks: InstallationTask[] = [];
+  let updateCheckLogs: string[] = [];
+  let updateCheckLogsExpanded = false;
+  let updateCheckLogsLoading = false;
+  let updateCheckLogsError = '';
   let updateTaskLogs: Record<string, string[]> = {};
   let updateTaskLogLoading: Record<string, boolean> = {};
   let updateTaskLogErrors: Record<string, string> = {};
@@ -462,6 +466,19 @@
     return 'View Logs';
   }
 
+  function updateCheckLogButtonLabel() {
+    if (updateCheckLogsLoading) {
+      return 'Loading Check Logs';
+    }
+    if (updateCheckLogsExpanded) {
+      return 'Hide Check Logs';
+    }
+    if (updateCheckLogs.length > 0) {
+      return 'Show Check Logs';
+    }
+    return 'View Check Logs';
+  }
+
   function resetClusterForm() {
     if (!cluster) {
       return;
@@ -651,6 +668,34 @@
       };
     } finally {
       updateTaskLogLoading = { ...updateTaskLogLoading, [taskID]: false };
+    }
+  }
+
+  async function toggleUpdateCheckLogs() {
+    if (updateCheckLogsExpanded) {
+      updateCheckLogsExpanded = false;
+      return;
+    }
+
+    updateCheckLogsExpanded = true;
+    if (updateCheckLogs.length > 0 || updateCheckLogsLoading) {
+      return;
+    }
+
+    await loadUpdateCheckLogs();
+  }
+
+  async function loadUpdateCheckLogs() {
+    updateCheckLogsLoading = true;
+    updateCheckLogsError = '';
+
+    try {
+      const payload = await fetchJSON<TaskLogResponse>('/api/v1/update/check/logs?lines=160');
+      updateCheckLogs = payload.lines;
+    } catch (err) {
+      updateCheckLogsError = err instanceof Error ? err.message : 'Update check logs unavailable';
+    } finally {
+      updateCheckLogsLoading = false;
     }
   }
 
@@ -881,7 +926,7 @@
         </div>
       </div>
 
-    <div class="runtime-layout">
+      <div class="runtime-layout">
       <div class="runtime-hero">
         <div class="runtime-copy">
           <span class={`badge badge-${updates?.updateAvailable ? 'failed' : 'succeeded'}`}>
@@ -926,6 +971,25 @@
           <dd>{formatDate(updates?.lastUpdatedAt)}</dd>
         </div>
       </div>
+
+      <div class="task-actions">
+        <button type="button" class="secondary-action" disabled={updateCheckLogsLoading} on:click={toggleUpdateCheckLogs}>
+          {updateCheckLogButtonLabel()}
+        </button>
+        {#if updateCheckLogsExpanded}
+          <button type="button" class="secondary-action" disabled={updateCheckLogsLoading} on:click={loadUpdateCheckLogs}>
+            {updateCheckLogsLoading ? 'Refreshing Check Logs' : 'Refresh Check Logs'}
+          </button>
+        {/if}
+      </div>
+
+      {#if updateCheckLogsExpanded}
+        {#if updateCheckLogsError}
+          <p class="task-error">{updateCheckLogsError}</p>
+        {:else}
+          <pre class="log-output task-log-output">{updateCheckLogs.length > 0 ? updateCheckLogs.join('\n') : 'No log output recorded for version checks yet.'}</pre>
+        {/if}
+      {/if}
     </div>
 
     {#if updateTasks.length > 0}

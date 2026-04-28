@@ -69,9 +69,9 @@ func (c *Client) LocalVersion(_ context.Context, layout domain.ManagedLayout) (s
 	return version, nil
 }
 
-func (c *Client) RemoteVersion(ctx context.Context, layout domain.ManagedLayout) (string, command.Result, error) {
+func (c *Client) RemoteVersion(ctx context.Context, layout domain.ManagedLayout, logPath string) (string, command.Result, error) {
 	plan := RemoteVersionPlan(layout)
-	result, err := c.runner.Run(ctx, plan.Name, plan.Args...)
+	result, err := c.runner.RunWithOptions(ctx, command.StartOptions{StdoutPath: logPath, StderrPath: logPath}, plan.Name, plan.Args...)
 	if err != nil {
 		return "", result, err
 	}

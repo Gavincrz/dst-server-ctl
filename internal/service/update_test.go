@@ -41,7 +41,7 @@ func TestUpdateServiceCheckNowUpdatesVersionState(t *testing.T) {
 			UpdatedAt: now.Add(-2 * time.Hour),
 		},
 	}
-	service := NewUpdateService(domain.ManagedLayout{}, installs, updates, &fakeTaskRepository{}, &fakeTaskIDGenerator{}, &fakeUpdateVersionReader{
+	service := NewUpdateService(domain.ManagedLayout{Logs: "/srv/managed/logs"}, installs, updates, &fakeTaskRepository{}, &fakeTaskIDGenerator{}, &fakeUpdateVersionReader{
 		localVersion:  "100",
 		remoteVersion: "101",
 	}, &fakeUpdateRuntimeController{})
@@ -62,6 +62,9 @@ func TestUpdateServiceCheckNowUpdatesVersionState(t *testing.T) {
 	}
 	if updates.saved == nil || updates.saved.LastCheckedAt == nil {
 		t.Fatal("saved LastCheckedAt = nil, want populated")
+	}
+	if service.reader.(*fakeUpdateVersionReader).remoteLogPath != "/srv/managed/logs/update-check.log" {
+		t.Fatalf("remoteLogPath = %q, want /srv/managed/logs/update-check.log", service.reader.(*fakeUpdateVersionReader).remoteLogPath)
 	}
 }
 
@@ -243,6 +246,7 @@ type fakeUpdateVersionReader struct {
 	remoteVersion string
 	remoteResult  command.Result
 	remoteErr     error
+	remoteLogPath string
 	updateResult  command.Result
 	updateErr     error
 	updateLogPath string
@@ -274,7 +278,8 @@ func (r *fakeUpdateVersionReader) LocalVersion(context.Context, domain.ManagedLa
 	return r.localVersion, nil
 }
 
-func (r *fakeUpdateVersionReader) RemoteVersion(context.Context, domain.ManagedLayout) (string, command.Result, error) {
+func (r *fakeUpdateVersionReader) RemoteVersion(_ context.Context, _ domain.ManagedLayout, logPath string) (string, command.Result, error) {
+	r.remoteLogPath = logPath
 	if r.remoteErr != nil {
 		return "", r.remoteResult, r.remoteErr
 	}

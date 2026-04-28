@@ -325,6 +325,7 @@ func TestInstallTaskLogsEndpoint(t *testing.T) {
 		Cluster:         fakeClusterConfigService{},
 		InstallTasks:    fakeInstallationTaskService{},
 		InstallTaskLogs: fakeInstallTaskLogService{lines: []string{"steamcmd: starting", "steamcmd: downloading"}},
+		UpdateCheckLogs: fakeUpdateCheckLogService{},
 		UpdateTaskLogs:  fakeUpdateTaskLogService{},
 	})
 
@@ -355,6 +356,7 @@ func TestUpdateTaskLogsEndpoint(t *testing.T) {
 		Cluster:         fakeClusterConfigService{},
 		InstallTasks:    fakeInstallationTaskService{},
 		InstallTaskLogs: fakeInstallTaskLogService{},
+		UpdateCheckLogs: fakeUpdateCheckLogService{},
 		UpdateTaskLogs:  fakeUpdateTaskLogService{lines: []string{"steamcmd: updating", "steamcmd: validating"}},
 	})
 
@@ -372,6 +374,37 @@ func TestUpdateTaskLogsEndpoint(t *testing.T) {
 	}
 	if payload.TaskID != "task-2" {
 		t.Fatalf("taskID = %q, want task-2", payload.TaskID)
+	}
+	if len(payload.Lines) != 2 {
+		t.Fatalf("line count = %d, want 2", len(payload.Lines))
+	}
+}
+
+func TestUpdateCheckLogsEndpoint(t *testing.T) {
+	router := NewRouter(testLogger(), Services{
+		Status:          fakeStatusReader{},
+		Installation:    fakeInstallationStatusReader{},
+		Cluster:         fakeClusterConfigService{},
+		InstallTasks:    fakeInstallationTaskService{},
+		InstallTaskLogs: fakeInstallTaskLogService{},
+		UpdateCheckLogs: fakeUpdateCheckLogService{lines: []string{"checking remote build", "buildid=12345"}},
+		UpdateTaskLogs:  fakeUpdateTaskLogService{},
+	})
+
+	request := httptest.NewRequest(nethttp.MethodGet, "/api/v1/update/check/logs?lines=50", nil)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	if response.Code != nethttp.StatusOK {
+		t.Fatalf("status = %d, want %d", response.Code, nethttp.StatusOK)
+	}
+
+	var payload taskLogResponse
+	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode response error = %v", err)
+	}
+	if payload.TaskID != "update-check" {
+		t.Fatalf("taskID = %q, want update-check", payload.TaskID)
 	}
 	if len(payload.Lines) != 2 {
 		t.Fatalf("line count = %d, want 2", len(payload.Lines))
@@ -747,6 +780,11 @@ type fakeUpdateTaskLogService struct {
 	err   error
 }
 
+type fakeUpdateCheckLogService struct {
+	lines []string
+	err   error
+}
+
 type fakeRuntimeHistoryService struct {
 	events []domain.RuntimeEvent
 	err    error
@@ -843,6 +881,13 @@ func (s fakeInstallTaskLogService) Get(context.Context, domain.TaskID, int) ([]s
 }
 
 func (s fakeUpdateTaskLogService) Get(context.Context, domain.TaskID, int) ([]string, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return s.lines, nil
+}
+
+func (s fakeUpdateCheckLogService) Get(context.Context, int) ([]string, error) {
 	if s.err != nil {
 		return nil, s.err
 	}
