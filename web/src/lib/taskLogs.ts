@@ -4,6 +4,10 @@ type TaskLogButtonState = {
   hasLogs: boolean;
 };
 
+type TaskLogTask = {
+  id: string;
+};
+
 export function taskLogButtonLabel(state: TaskLogButtonState) {
   if (state.loading) {
     return 'Loading Logs';
@@ -15,4 +19,8 @@ export function taskLogButtonLabel(state: TaskLogButtonState) {
     return 'Show Logs';
   }
   return 'View Logs';
+}
+
+export function expandedTaskIDs(expanded: Record<string, boolean>, tasks: TaskLogTask[]) {
+  return tasks.filter((task) => expanded[task.id]).map((task) => task.id);
 }

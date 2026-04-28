@@ -8,7 +8,7 @@
     type ClusterConfig,
     type ClusterFormState
   } from './lib/clusterForm';
-  import { taskLogButtonLabel } from './lib/taskLogs';
+  import { expandedTaskIDs, taskLogButtonLabel } from './lib/taskLogs';
 
   const installPollIntervalMs = 3000;
 
@@ -196,6 +196,14 @@
       if (!clusterForm || !previousCluster || !clusterFormIsDirty(clusterForm, previousCluster)) {
         clusterForm = clusterFormFromConfig(clusterConfig);
       }
+
+      if (expandedTaskIDs(expandedInstallTaskLogs, installTaskStatus).length > 0) {
+        await refreshInstallTaskLogs(installTaskStatus);
+      }
+      if (expandedTaskIDs(expandedUpdateTaskLogs, updateTaskStatus).length > 0) {
+        await refreshUpdateTaskLogs(updateTaskStatus);
+      }
+
       refreshedAt = new Date();
     } catch (err) {
       refreshError = err instanceof Error ? err.message : 'Request failed';
@@ -693,6 +701,26 @@
     }
   }
 
+  async function refreshInstallTaskLogs(tasks: InstallationTask[]) {
+    const taskIDs = expandedTaskIDs(expandedInstallTaskLogs, tasks).filter((taskID) => !installTaskLogLoading[taskID]);
+    if (taskIDs.length === 0) {
+      return;
+    }
+
+    await Promise.all(taskIDs.map(async (taskID) => {
+      try {
+        const payload = await fetchJSON<TaskLogResponse>(`/api/v1/install/tasks/${taskID}/logs?lines=160`);
+        installTaskLogs = { ...installTaskLogs, [taskID]: payload.lines };
+        installTaskLogErrors = { ...installTaskLogErrors, [taskID]: '' };
+      } catch (err) {
+        installTaskLogErrors = {
+          ...installTaskLogErrors,
+          [taskID]: err instanceof Error ? err.message : 'Install task logs unavailable'
+        };
+      }
+    }));
+  }
+
   async function loadUpdateTaskLogs(taskID: string) {
     updateTaskLogLoading = { ...updateTaskLogLoading, [taskID]: true };
     updateTaskLogErrors = { ...updateTaskLogErrors, [taskID]: '' };
@@ -708,6 +736,26 @@
     } finally {
       updateTaskLogLoading = { ...updateTaskLogLoading, [taskID]: false };
     }
+  }
+
+  async function refreshUpdateTaskLogs(tasks: InstallationTask[]) {
+    const taskIDs = expandedTaskIDs(expandedUpdateTaskLogs, tasks).filter((taskID) => !updateTaskLogLoading[taskID]);
+    if (taskIDs.length === 0) {
+      return;
+    }
+
+    await Promise.all(taskIDs.map(async (taskID) => {
+      try {
+        const payload = await fetchJSON<TaskLogResponse>(`/api/v1/update/tasks/${taskID}/logs?lines=160`);
+        updateTaskLogs = { ...updateTaskLogs, [taskID]: payload.lines };
+        updateTaskLogErrors = { ...updateTaskLogErrors, [taskID]: '' };
+      } catch (err) {
+        updateTaskLogErrors = {
+          ...updateTaskLogErrors,
+          [taskID]: err instanceof Error ? err.message : 'Update task logs unavailable'
+        };
+      }
+    }));
   }
 
   async function toggleUpdateCheckLogs() {
