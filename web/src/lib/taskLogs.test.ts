@@ -18,6 +18,18 @@ describe('taskLogButtonLabel', () => {
   it('shows view before any logs are loaded', () => {
     expect(taskLogButtonLabel({ loading: false, expanded: false, hasLogs: false })).toBe('View Logs');
   });
+
+  it('uses custom labels for non-task log panels', () => {
+    expect(taskLogButtonLabel(
+      { loading: false, expanded: false, hasLogs: false },
+      {
+        loading: 'Loading Check Logs',
+        hide: 'Hide Check Logs',
+        show: 'Show Check Logs',
+        view: 'View Check Logs'
+      }
+    )).toBe('View Check Logs');
+  });
 });
 
 describe('expandedTaskIDs', () => {

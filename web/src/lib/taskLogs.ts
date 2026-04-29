@@ -1,7 +1,35 @@
-type TaskLogButtonState = {
+export type LogButtonState = {
   loading: boolean;
   expanded: boolean;
   hasLogs: boolean;
+};
+
+export type LogButtonLabels = {
+  loading: string;
+  hide: string;
+  show: string;
+  view: string;
+};
+
+export type SingleLogPanelState = {
+  lines: string[];
+  expanded: boolean;
+  loading: boolean;
+  error: string;
+};
+
+export type KeyedTaskLogCollectionState = {
+  logs: Record<string, string[]>;
+  loading: Record<string, boolean>;
+  errors: Record<string, string>;
+  expanded: Record<string, boolean>;
+};
+
+const defaultLogButtonLabels: LogButtonLabels = {
+  loading: 'Loading Logs',
+  hide: 'Hide Logs',
+  show: 'Show Logs',
+  view: 'View Logs'
 };
 
 type TaskLogTask = {
@@ -9,17 +37,17 @@ type TaskLogTask = {
   status?: string;
 };
 
-export function taskLogButtonLabel(state: TaskLogButtonState) {
+export function taskLogButtonLabel(state: LogButtonState, labels: LogButtonLabels = defaultLogButtonLabels) {
   if (state.loading) {
-    return 'Loading Logs';
+    return labels.loading;
   }
   if (state.expanded) {
-    return 'Hide Logs';
+    return labels.hide;
   }
   if (state.hasLogs) {
-    return 'Show Logs';
+    return labels.show;
   }
-  return 'View Logs';
+  return labels.view;
 }
 
 export function expandedTaskIDs(expanded: Record<string, boolean>, tasks: TaskLogTask[]) {

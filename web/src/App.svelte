@@ -8,7 +8,12 @@
     type ClusterConfig,
     type ClusterFormState
   } from './lib/clusterForm';
-  import { activeExpandedTaskIDs, expandedTaskIDs, taskLogButtonLabel } from './lib/taskLogs';
+  import {
+    activeExpandedTaskIDs,
+    taskLogButtonLabel,
+    type KeyedTaskLogCollectionState,
+    type SingleLogPanelState
+  } from './lib/taskLogs';
 
   const installPollIntervalMs = 3000;
 
@@ -80,6 +85,8 @@
     createdAt: string;
   };
 
+  type TaskLogKind = 'install' | 'update';
+
   let controller: ControllerStatus | null = null;
   let installation: InstallationStatus | null = null;
   let updates: UpdateStatus | null = null;
@@ -93,18 +100,24 @@
   let runtimeHistory: RuntimeHistoryEvent[] = [];
   let installTasks: InstallationTask[] = [];
   let updateTasks: InstallationTask[] = [];
-  let updateCheckLogs: string[] = [];
-  let updateCheckLogsExpanded = false;
-  let updateCheckLogsLoading = false;
-  let updateCheckLogsError = '';
-  let installTaskLogs: Record<string, string[]> = {};
-  let installTaskLogLoading: Record<string, boolean> = {};
-  let installTaskLogErrors: Record<string, string> = {};
-  let expandedInstallTaskLogs: Record<string, boolean> = {};
-  let updateTaskLogs: Record<string, string[]> = {};
-  let updateTaskLogLoading: Record<string, boolean> = {};
-  let updateTaskLogErrors: Record<string, string> = {};
-  let expandedUpdateTaskLogs: Record<string, boolean> = {};
+  let updateCheckLogState: SingleLogPanelState = {
+    lines: [],
+    expanded: false,
+    loading: false,
+    error: ''
+  };
+  let installTaskLogState: KeyedTaskLogCollectionState = {
+    logs: {},
+    loading: {},
+    errors: {},
+    expanded: {}
+  };
+  let updateTaskLogState: KeyedTaskLogCollectionState = {
+    logs: {},
+    loading: {},
+    errors: {},
+    expanded: {}
+  };
   let loading = true;
   let polling = false;
   let installSubmitting = false;
@@ -156,6 +169,28 @@
     return tasks.find((task) => task.status === 'running') ?? tasks.find((task) => task.status === 'pending') ?? null;
   }
 
+  function taskLogState(kind: TaskLogKind) {
+    return kind === 'install' ? installTaskLogState : updateTaskLogState;
+  }
+
+  function setTaskLogState(kind: TaskLogKind, state: KeyedTaskLogCollectionState) {
+    if (kind === 'install') {
+      installTaskLogState = state;
+      return;
+    }
+    updateTaskLogState = state;
+  }
+
+  function taskLogEndpoint(kind: TaskLogKind, taskID: string) {
+    return kind === 'install'
+      ? `/api/v1/install/tasks/${taskID}/logs?lines=160`
+      : `/api/v1/update/tasks/${taskID}/logs?lines=160`;
+  }
+
+  function taskLogUnavailableMessage(kind: TaskLogKind) {
+    return kind === 'install' ? 'Install task logs unavailable' : 'Update task logs unavailable';
+  }
+
   async function refresh(options: { background?: boolean } = {}) {
     const background = options.background ?? false;
 
@@ -197,11 +232,14 @@
         clusterForm = clusterFormFromConfig(clusterConfig);
       }
 
-      if (activeExpandedTaskIDs(expandedInstallTaskLogs, installTaskStatus).length > 0) {
-        await refreshInstallTaskLogs(installTaskStatus);
+      if (activeExpandedTaskIDs(installTaskLogState.expanded, installTaskStatus).length > 0) {
+        await refreshTaskLogs('install', installTaskStatus);
       }
-      if (activeExpandedTaskIDs(expandedUpdateTaskLogs, updateTaskStatus).length > 0) {
-        await refreshUpdateTaskLogs(updateTaskStatus);
+      if (activeExpandedTaskIDs(updateTaskLogState.expanded, updateTaskStatus).length > 0) {
+        await refreshTaskLogs('update', updateTaskStatus);
+      }
+      if (updateCheckLogState.expanded) {
+        await refreshUpdateCheckLogs();
       }
 
       refreshedAt = new Date();
@@ -467,32 +505,37 @@
   }
 
   function installTaskLogButtonLabel(taskID: string) {
+    const state = taskLogState('install');
     return taskLogButtonLabel({
-      loading: !!installTaskLogLoading[taskID],
-      expanded: !!expandedInstallTaskLogs[taskID],
-      hasLogs: taskID in installTaskLogs
+      loading: !!state.loading[taskID],
+      expanded: !!state.expanded[taskID],
+      hasLogs: taskID in state.logs
     });
   }
 
   function updateTaskLogButtonLabel(taskID: string) {
+    const state = taskLogState('update');
     return taskLogButtonLabel({
-      loading: !!updateTaskLogLoading[taskID],
-      expanded: !!expandedUpdateTaskLogs[taskID],
-      hasLogs: taskID in updateTaskLogs
+      loading: !!state.loading[taskID],
+      expanded: !!state.expanded[taskID],
+      hasLogs: taskID in state.logs
     });
   }
 
   function updateCheckLogButtonLabel() {
-    if (updateCheckLogsLoading) {
-      return 'Loading Check Logs';
-    }
-    if (updateCheckLogsExpanded) {
-      return 'Hide Check Logs';
-    }
-    if (updateCheckLogs.length > 0) {
-      return 'Show Check Logs';
-    }
-    return 'View Check Logs';
+    return taskLogButtonLabel(
+      {
+        loading: updateCheckLogState.loading,
+        expanded: updateCheckLogState.expanded,
+        hasLogs: updateCheckLogState.lines.length > 0
+      },
+      {
+        loading: 'Loading Check Logs',
+        hide: 'Hide Check Logs',
+        show: 'Show Check Logs',
+        view: 'View Check Logs'
+      }
+    );
   }
 
   function resetClusterForm() {
@@ -656,116 +699,98 @@
     }
   }
 
-  async function toggleUpdateTaskLogs(taskID: string) {
-    if (expandedUpdateTaskLogs[taskID]) {
-      expandedUpdateTaskLogs = { ...expandedUpdateTaskLogs, [taskID]: false };
+  async function toggleTaskLogs(kind: TaskLogKind, taskID: string) {
+    const state = taskLogState(kind);
+    if (state.expanded[taskID]) {
+      setTaskLogState(kind, {
+        ...state,
+        expanded: { ...state.expanded, [taskID]: false }
+      });
       return;
     }
 
-    expandedUpdateTaskLogs = { ...expandedUpdateTaskLogs, [taskID]: true };
-    if (updateTaskLogs[taskID] || updateTaskLogLoading[taskID]) {
+    setTaskLogState(kind, {
+      ...state,
+      expanded: { ...state.expanded, [taskID]: true }
+    });
+
+    if (state.logs[taskID] || state.loading[taskID]) {
       return;
     }
 
-    await loadUpdateTaskLogs(taskID);
+    await loadTaskLogs(kind, taskID);
   }
 
-  async function toggleInstallTaskLogs(taskID: string) {
-    if (expandedInstallTaskLogs[taskID]) {
-      expandedInstallTaskLogs = { ...expandedInstallTaskLogs, [taskID]: false };
-      return;
-    }
-
-    expandedInstallTaskLogs = { ...expandedInstallTaskLogs, [taskID]: true };
-    if (installTaskLogs[taskID] || installTaskLogLoading[taskID]) {
-      return;
-    }
-
-    await loadInstallTaskLogs(taskID);
-  }
-
-  async function loadInstallTaskLogs(taskID: string) {
-    installTaskLogLoading = { ...installTaskLogLoading, [taskID]: true };
-    installTaskLogErrors = { ...installTaskLogErrors, [taskID]: '' };
+  async function loadTaskLogs(kind: TaskLogKind, taskID: string) {
+    const state = taskLogState(kind);
+    setTaskLogState(kind, {
+      ...state,
+      loading: { ...state.loading, [taskID]: true },
+      errors: { ...state.errors, [taskID]: '' }
+    });
 
     try {
-      const payload = await fetchJSON<TaskLogResponse>(`/api/v1/install/tasks/${taskID}/logs?lines=160`);
-      installTaskLogs = { ...installTaskLogs, [taskID]: payload.lines };
+      const payload = await fetchJSON<TaskLogResponse>(taskLogEndpoint(kind, taskID));
+      const currentState = taskLogState(kind);
+      setTaskLogState(kind, {
+        ...currentState,
+        logs: { ...currentState.logs, [taskID]: payload.lines }
+      });
     } catch (err) {
-      installTaskLogErrors = {
-        ...installTaskLogErrors,
-        [taskID]: err instanceof Error ? err.message : 'Install task logs unavailable'
-      };
+      const currentState = taskLogState(kind);
+      setTaskLogState(kind, {
+        ...currentState,
+        errors: {
+          ...currentState.errors,
+          [taskID]: err instanceof Error ? err.message : taskLogUnavailableMessage(kind)
+        }
+      });
     } finally {
-      installTaskLogLoading = { ...installTaskLogLoading, [taskID]: false };
+      const currentState = taskLogState(kind);
+      setTaskLogState(kind, {
+        ...currentState,
+        loading: { ...currentState.loading, [taskID]: false }
+      });
     }
   }
 
-  async function refreshInstallTaskLogs(tasks: InstallationTask[]) {
-    const taskIDs = activeExpandedTaskIDs(expandedInstallTaskLogs, tasks).filter((taskID) => !installTaskLogLoading[taskID]);
+  async function refreshTaskLogs(kind: TaskLogKind, tasks: InstallationTask[]) {
+    const state = taskLogState(kind);
+    const taskIDs = activeExpandedTaskIDs(state.expanded, tasks).filter((taskID) => !state.loading[taskID]);
     if (taskIDs.length === 0) {
       return;
     }
 
     await Promise.all(taskIDs.map(async (taskID) => {
       try {
-        const payload = await fetchJSON<TaskLogResponse>(`/api/v1/install/tasks/${taskID}/logs?lines=160`);
-        installTaskLogs = { ...installTaskLogs, [taskID]: payload.lines };
-        installTaskLogErrors = { ...installTaskLogErrors, [taskID]: '' };
+        const payload = await fetchJSON<TaskLogResponse>(taskLogEndpoint(kind, taskID));
+        const currentState = taskLogState(kind);
+        setTaskLogState(kind, {
+          ...currentState,
+          logs: { ...currentState.logs, [taskID]: payload.lines },
+          errors: { ...currentState.errors, [taskID]: '' }
+        });
       } catch (err) {
-        installTaskLogErrors = {
-          ...installTaskLogErrors,
-          [taskID]: err instanceof Error ? err.message : 'Install task logs unavailable'
-        };
-      }
-    }));
-  }
-
-  async function loadUpdateTaskLogs(taskID: string) {
-    updateTaskLogLoading = { ...updateTaskLogLoading, [taskID]: true };
-    updateTaskLogErrors = { ...updateTaskLogErrors, [taskID]: '' };
-
-    try {
-      const payload = await fetchJSON<TaskLogResponse>(`/api/v1/update/tasks/${taskID}/logs?lines=160`);
-      updateTaskLogs = { ...updateTaskLogs, [taskID]: payload.lines };
-    } catch (err) {
-      updateTaskLogErrors = {
-        ...updateTaskLogErrors,
-        [taskID]: err instanceof Error ? err.message : 'Update task logs unavailable'
-      };
-    } finally {
-      updateTaskLogLoading = { ...updateTaskLogLoading, [taskID]: false };
-    }
-  }
-
-  async function refreshUpdateTaskLogs(tasks: InstallationTask[]) {
-    const taskIDs = activeExpandedTaskIDs(expandedUpdateTaskLogs, tasks).filter((taskID) => !updateTaskLogLoading[taskID]);
-    if (taskIDs.length === 0) {
-      return;
-    }
-
-    await Promise.all(taskIDs.map(async (taskID) => {
-      try {
-        const payload = await fetchJSON<TaskLogResponse>(`/api/v1/update/tasks/${taskID}/logs?lines=160`);
-        updateTaskLogs = { ...updateTaskLogs, [taskID]: payload.lines };
-        updateTaskLogErrors = { ...updateTaskLogErrors, [taskID]: '' };
-      } catch (err) {
-        updateTaskLogErrors = {
-          ...updateTaskLogErrors,
-          [taskID]: err instanceof Error ? err.message : 'Update task logs unavailable'
-        };
+        const currentState = taskLogState(kind);
+        setTaskLogState(kind, {
+          ...currentState,
+          errors: {
+            ...currentState.errors,
+            [taskID]: err instanceof Error ? err.message : taskLogUnavailableMessage(kind)
+          }
+        });
       }
     }));
   }
 
   async function toggleUpdateCheckLogs() {
-    if (updateCheckLogsExpanded) {
-      updateCheckLogsExpanded = false;
+    if (updateCheckLogState.expanded) {
+      updateCheckLogState = { ...updateCheckLogState, expanded: false };
       return;
     }
 
-    updateCheckLogsExpanded = true;
-    if (updateCheckLogs.length > 0 || updateCheckLogsLoading) {
+    updateCheckLogState = { ...updateCheckLogState, expanded: true };
+    if (updateCheckLogState.lines.length > 0 || updateCheckLogState.loading) {
       return;
     }
 
@@ -773,16 +798,44 @@
   }
 
   async function loadUpdateCheckLogs() {
-    updateCheckLogsLoading = true;
-    updateCheckLogsError = '';
+    updateCheckLogState = {
+      ...updateCheckLogState,
+      loading: true,
+      error: ''
+    };
 
     try {
       const payload = await fetchJSON<TaskLogResponse>('/api/v1/update/check/logs?lines=160');
-      updateCheckLogs = payload.lines;
+      updateCheckLogState = {
+        ...updateCheckLogState,
+        lines: payload.lines
+      };
     } catch (err) {
-      updateCheckLogsError = err instanceof Error ? err.message : 'Update check logs unavailable';
+      updateCheckLogState = {
+        ...updateCheckLogState,
+        error: err instanceof Error ? err.message : 'Update check logs unavailable'
+      };
     } finally {
-      updateCheckLogsLoading = false;
+      updateCheckLogState = {
+        ...updateCheckLogState,
+        loading: false
+      };
+    }
+  }
+
+  async function refreshUpdateCheckLogs() {
+    try {
+      const payload = await fetchJSON<TaskLogResponse>('/api/v1/update/check/logs?lines=160');
+      updateCheckLogState = {
+        ...updateCheckLogState,
+        lines: payload.lines,
+        error: ''
+      };
+    } catch (err) {
+      updateCheckLogState = {
+        ...updateCheckLogState,
+        error: err instanceof Error ? err.message : 'Update check logs unavailable'
+      };
     }
   }
 
@@ -1060,21 +1113,21 @@
       </div>
 
       <div class="task-actions">
-        <button type="button" class="secondary-action" disabled={updateCheckLogsLoading} on:click={toggleUpdateCheckLogs}>
+        <button type="button" class="secondary-action" disabled={updateCheckLogState.loading} on:click={toggleUpdateCheckLogs}>
           {updateCheckLogButtonLabel()}
         </button>
-        {#if updateCheckLogsExpanded}
-          <button type="button" class="secondary-action" disabled={updateCheckLogsLoading} on:click={loadUpdateCheckLogs}>
-            {updateCheckLogsLoading ? 'Refreshing Check Logs' : 'Refresh Check Logs'}
+        {#if updateCheckLogState.expanded}
+          <button type="button" class="secondary-action" disabled={updateCheckLogState.loading} on:click={loadUpdateCheckLogs}>
+            {updateCheckLogState.loading ? 'Refreshing Check Logs' : 'Refresh Check Logs'}
           </button>
         {/if}
       </div>
 
-      {#if updateCheckLogsExpanded}
-        {#if updateCheckLogsError}
-          <p class="task-error">{updateCheckLogsError}</p>
+      {#if updateCheckLogState.expanded}
+        {#if updateCheckLogState.error}
+          <p class="task-error">{updateCheckLogState.error}</p>
         {:else}
-          <pre class="log-output task-log-output">{updateCheckLogs.length > 0 ? updateCheckLogs.join('\n') : 'No log output recorded for version checks yet.'}</pre>
+          <pre class="log-output task-log-output">{updateCheckLogState.lines.length > 0 ? updateCheckLogState.lines.join('\n') : 'No log output recorded for version checks yet.'}</pre>
         {/if}
       {/if}
     </div>
@@ -1109,23 +1162,23 @@
               </div>
             </dl>
             <div class="task-actions">
-              <button type="button" class="secondary-action" disabled={updateTaskLogLoading[task.id]} on:click={() => toggleUpdateTaskLogs(task.id)}>
+              <button type="button" class="secondary-action" disabled={updateTaskLogState.loading[task.id]} on:click={() => toggleTaskLogs('update', task.id)}>
                 {updateTaskLogButtonLabel(task.id)}
               </button>
-              {#if expandedUpdateTaskLogs[task.id]}
-                <button type="button" class="secondary-action" disabled={updateTaskLogLoading[task.id]} on:click={() => loadUpdateTaskLogs(task.id)}>
-                  {updateTaskLogLoading[task.id] ? 'Refreshing Logs' : 'Refresh Logs'}
+              {#if updateTaskLogState.expanded[task.id]}
+                <button type="button" class="secondary-action" disabled={updateTaskLogState.loading[task.id]} on:click={() => loadTaskLogs('update', task.id)}>
+                  {updateTaskLogState.loading[task.id] ? 'Refreshing Logs' : 'Refresh Logs'}
                 </button>
               {/if}
             </div>
             {#if task.error}
               <p class="task-error">{task.error}</p>
             {/if}
-            {#if expandedUpdateTaskLogs[task.id]}
-              {#if updateTaskLogErrors[task.id]}
-                <p class="task-error">{updateTaskLogErrors[task.id]}</p>
+            {#if updateTaskLogState.expanded[task.id]}
+              {#if updateTaskLogState.errors[task.id]}
+                <p class="task-error">{updateTaskLogState.errors[task.id]}</p>
               {:else}
-                <pre class="log-output task-log-output">{updateTaskLogs[task.id]?.length ? updateTaskLogs[task.id].join('\n') : 'No log output recorded for this update task yet.'}</pre>
+                <pre class="log-output task-log-output">{updateTaskLogState.logs[task.id]?.length ? updateTaskLogState.logs[task.id].join('\n') : 'No log output recorded for this update task yet.'}</pre>
               {/if}
             {/if}
           </article>
@@ -1542,23 +1595,23 @@
                 </div>
               </dl>
               <div class="task-actions">
-                <button type="button" class="secondary-action" disabled={installTaskLogLoading[task.id]} on:click={() => toggleInstallTaskLogs(task.id)}>
+                <button type="button" class="secondary-action" disabled={installTaskLogState.loading[task.id]} on:click={() => toggleTaskLogs('install', task.id)}>
                   {installTaskLogButtonLabel(task.id)}
                 </button>
-                {#if expandedInstallTaskLogs[task.id]}
-                  <button type="button" class="secondary-action" disabled={installTaskLogLoading[task.id]} on:click={() => loadInstallTaskLogs(task.id)}>
-                    {installTaskLogLoading[task.id] ? 'Refreshing Logs' : 'Refresh Logs'}
+                {#if installTaskLogState.expanded[task.id]}
+                  <button type="button" class="secondary-action" disabled={installTaskLogState.loading[task.id]} on:click={() => loadTaskLogs('install', task.id)}>
+                    {installTaskLogState.loading[task.id] ? 'Refreshing Logs' : 'Refresh Logs'}
                   </button>
                 {/if}
               </div>
               {#if task.error}
                 <p class="task-error">{task.error}</p>
               {/if}
-              {#if expandedInstallTaskLogs[task.id]}
-                {#if installTaskLogErrors[task.id]}
-                  <p class="task-error">{installTaskLogErrors[task.id]}</p>
+              {#if installTaskLogState.expanded[task.id]}
+                {#if installTaskLogState.errors[task.id]}
+                  <p class="task-error">{installTaskLogState.errors[task.id]}</p>
                 {:else}
-                  <pre class="log-output task-log-output">{installTaskLogs[task.id]?.length ? installTaskLogs[task.id].join('\n') : 'No log output recorded for this install task yet.'}</pre>
+                  <pre class="log-output task-log-output">{installTaskLogState.logs[task.id]?.length ? installTaskLogState.logs[task.id].join('\n') : 'No log output recorded for this install task yet.'}</pre>
                 {/if}
               {/if}
             </article>
