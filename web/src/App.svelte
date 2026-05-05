@@ -9,9 +9,10 @@
     type ClusterFormState
   } from './lib/clusterForm';
   import {
+    activeExpandedLogIDs,
     activeExpandedTaskIDs,
     taskLogButtonLabel,
-    type KeyedTaskLogCollectionState,
+    type KeyedLogCollectionState,
     type SingleLogPanelState
   } from './lib/taskLogs';
 
@@ -86,6 +87,7 @@
   };
 
   type TaskLogKind = 'install' | 'update';
+  type RuntimeShardLogKind = 'Master' | 'Caves';
 
   let controller: ControllerStatus | null = null;
   let installation: InstallationStatus | null = null;
@@ -93,9 +95,11 @@
   let cluster: ClusterConfig | null = null;
   let clusterForm: ClusterFormState | null = null;
   let runtime: RuntimeStatus | null = null;
-  let runtimeLogs: Record<string, string[]> = {
-    Master: [],
-    Caves: []
+  let runtimeLogState: KeyedLogCollectionState = {
+    logs: {},
+    loading: {},
+    errors: {},
+    expanded: {}
   };
   let runtimeHistory: RuntimeHistoryEvent[] = [];
   let installTasks: InstallationTask[] = [];
@@ -106,13 +110,13 @@
     loading: false,
     error: ''
   };
-  let installTaskLogState: KeyedTaskLogCollectionState = {
+  let installTaskLogState: KeyedLogCollectionState = {
     logs: {},
     loading: {},
     errors: {},
     expanded: {}
   };
-  let updateTaskLogState: KeyedTaskLogCollectionState = {
+  let updateTaskLogState: KeyedLogCollectionState = {
     logs: {},
     loading: {},
     errors: {},
@@ -173,7 +177,7 @@
     return kind === 'install' ? installTaskLogState : updateTaskLogState;
   }
 
-  function setTaskLogState(kind: TaskLogKind, state: KeyedTaskLogCollectionState) {
+  function setTaskLogState(kind: TaskLogKind, state: KeyedLogCollectionState) {
     if (kind === 'install') {
       installTaskLogState = state;
       return;
@@ -191,6 +195,10 @@
     return kind === 'install' ? 'Install task logs unavailable' : 'Update task logs unavailable';
   }
 
+  function runtimeLogEndpoint(shard: RuntimeShardLogKind) {
+    return `/api/v1/runtime/logs?shard=${shard}&lines=120`;
+  }
+
   async function refresh(options: { background?: boolean } = {}) {
     const background = options.background ?? false;
 
@@ -202,7 +210,7 @@
     refreshError = '';
 
     try {
-      const [controllerStatus, installationStatus, updateStatus, clusterConfig, runtimeStatus, installTaskStatus, updateTaskStatus, masterLogs, cavesLogs, history] = await Promise.all([
+      const [controllerStatus, installationStatus, updateStatus, clusterConfig, runtimeStatus, installTaskStatus, updateTaskStatus, history] = await Promise.all([
         fetchJSON<ControllerStatus>('/api/v1/status'),
         fetchJSON<InstallationStatus>('/api/v1/installation'),
         fetchJSON<UpdateStatus>('/api/v1/update'),
@@ -210,8 +218,6 @@
         fetchJSON<RuntimeStatus>('/api/v1/runtime'),
         fetchJSON<InstallationTask[]>('/api/v1/install/tasks'),
         fetchJSON<InstallationTask[]>('/api/v1/update/tasks'),
-        fetchJSON<RuntimeLogResponse>('/api/v1/runtime/logs?shard=Master&lines=120'),
-        fetchJSON<RuntimeLogResponse>('/api/v1/runtime/logs?shard=Caves&lines=120'),
         fetchJSON<RuntimeHistoryEvent[]>('/api/v1/runtime/history?limit=12')
       ]);
 
@@ -221,10 +227,6 @@
       updates = updateStatus;
       cluster = clusterConfig;
       runtime = runtimeStatus;
-      runtimeLogs = {
-        Master: masterLogs.lines,
-        Caves: cavesLogs.lines
-      };
       runtimeHistory = history;
       installTasks = installTaskStatus;
       updateTasks = updateTaskStatus;
@@ -240,6 +242,9 @@
       }
       if (updateCheckLogState.expanded) {
         await refreshUpdateCheckLogs();
+      }
+      if (activeExpandedLogIDs(runtimeLogState.expanded, [{ id: 'Master' }, { id: 'Caves' }], () => runtimeStatus.status === 'running').length > 0) {
+        await refreshRuntimeLogs(runtimeStatus);
       }
 
       refreshedAt = new Date();
@@ -534,6 +539,22 @@
         hide: 'Hide Check Logs',
         show: 'Show Check Logs',
         view: 'View Check Logs'
+      }
+    );
+  }
+
+  function runtimeLogButtonLabel(shard: RuntimeShardLogKind) {
+    return taskLogButtonLabel(
+      {
+        loading: !!runtimeLogState.loading[shard],
+        expanded: !!runtimeLogState.expanded[shard],
+        hasLogs: shard in runtimeLogState.logs
+      },
+      {
+        loading: `Loading ${shard} Logs`,
+        hide: `Hide ${shard} Logs`,
+        show: `Show ${shard} Logs`,
+        view: `View ${shard} Logs`
       }
     );
   }
@@ -837,6 +858,84 @@
         error: err instanceof Error ? err.message : 'Update check logs unavailable'
       };
     }
+  }
+
+  async function toggleRuntimeLogs(shard: RuntimeShardLogKind) {
+    if (runtimeLogState.expanded[shard]) {
+      runtimeLogState = {
+        ...runtimeLogState,
+        expanded: { ...runtimeLogState.expanded, [shard]: false }
+      };
+      return;
+    }
+
+    runtimeLogState = {
+      ...runtimeLogState,
+      expanded: { ...runtimeLogState.expanded, [shard]: true }
+    };
+
+    if (runtimeLogState.logs[shard] || runtimeLogState.loading[shard]) {
+      return;
+    }
+
+    await loadRuntimeLogs(shard);
+  }
+
+  async function loadRuntimeLogs(shard: RuntimeShardLogKind) {
+    runtimeLogState = {
+      ...runtimeLogState,
+      loading: { ...runtimeLogState.loading, [shard]: true },
+      errors: { ...runtimeLogState.errors, [shard]: '' }
+    };
+
+    try {
+      const payload = await fetchJSON<RuntimeLogResponse>(runtimeLogEndpoint(shard));
+      runtimeLogState = {
+        ...runtimeLogState,
+        logs: { ...runtimeLogState.logs, [shard]: payload.lines }
+      };
+    } catch (err) {
+      runtimeLogState = {
+        ...runtimeLogState,
+        errors: {
+          ...runtimeLogState.errors,
+          [shard]: err instanceof Error ? err.message : 'Runtime logs unavailable'
+        }
+      };
+    } finally {
+      runtimeLogState = {
+        ...runtimeLogState,
+        loading: { ...runtimeLogState.loading, [shard]: false }
+      };
+    }
+  }
+
+  async function refreshRuntimeLogs(runtimeStatus: RuntimeStatus | null) {
+    const shardIDs = activeExpandedLogIDs(runtimeLogState.expanded, [{ id: 'Master' }, { id: 'Caves' }], () => runtimeStatus?.status === 'running')
+      .filter((shardID) => !runtimeLogState.loading[shardID]);
+
+    if (shardIDs.length === 0) {
+      return;
+    }
+
+    await Promise.all(shardIDs.map(async (shardID) => {
+      try {
+        const payload = await fetchJSON<RuntimeLogResponse>(runtimeLogEndpoint(shardID as RuntimeShardLogKind));
+        runtimeLogState = {
+          ...runtimeLogState,
+          logs: { ...runtimeLogState.logs, [shardID]: payload.lines },
+          errors: { ...runtimeLogState.errors, [shardID]: '' }
+        };
+      } catch (err) {
+        runtimeLogState = {
+          ...runtimeLogState,
+          errors: {
+            ...runtimeLogState.errors,
+            [shardID]: err instanceof Error ? err.message : 'Runtime logs unavailable'
+          }
+        };
+      }
+    }));
   }
 
   async function startRuntime() {
@@ -1281,21 +1380,53 @@
       <article class="log-card">
         <div class="log-card-head">
           <strong>Master</strong>
-          <span class={`badge badge-${runtimeLogs.Master.length > 0 ? 'succeeded' : 'idle'}`}>
-            {runtimeLogs.Master.length > 0 ? `${runtimeLogs.Master.length} lines` : 'No output'}
+          <span class={`badge badge-${runtimeLogState.logs.Master?.length ? 'succeeded' : 'idle'}`}>
+            {runtimeLogState.logs.Master?.length ? `${runtimeLogState.logs.Master.length} lines` : 'No output'}
           </span>
         </div>
-        <pre class="log-output">{runtimeLogs.Master.length > 0 ? runtimeLogs.Master.join('\n') : 'No Master log output yet.'}</pre>
+        <div class="task-actions">
+          <button type="button" class="secondary-action" disabled={runtimeLogState.loading.Master} on:click={() => toggleRuntimeLogs('Master')}>
+            {runtimeLogButtonLabel('Master')}
+          </button>
+          {#if runtimeLogState.expanded.Master}
+            <button type="button" class="secondary-action" disabled={runtimeLogState.loading.Master} on:click={() => loadRuntimeLogs('Master')}>
+              {runtimeLogState.loading.Master ? 'Refreshing Master Logs' : 'Refresh Master Logs'}
+            </button>
+          {/if}
+        </div>
+        {#if runtimeLogState.expanded.Master}
+          {#if runtimeLogState.errors.Master}
+            <p class="task-error">{runtimeLogState.errors.Master}</p>
+          {:else}
+            <pre class="log-output">{runtimeLogState.logs.Master?.length ? runtimeLogState.logs.Master.join('\n') : 'No Master log output yet.'}</pre>
+          {/if}
+        {/if}
       </article>
 
       <article class="log-card">
         <div class="log-card-head">
           <strong>Caves</strong>
-          <span class={`badge badge-${runtimeLogs.Caves.length > 0 ? 'succeeded' : 'idle'}`}>
-            {runtimeLogs.Caves.length > 0 ? `${runtimeLogs.Caves.length} lines` : 'No output'}
+          <span class={`badge badge-${runtimeLogState.logs.Caves?.length ? 'succeeded' : 'idle'}`}>
+            {runtimeLogState.logs.Caves?.length ? `${runtimeLogState.logs.Caves.length} lines` : 'No output'}
           </span>
         </div>
-        <pre class="log-output">{runtimeLogs.Caves.length > 0 ? runtimeLogs.Caves.join('\n') : 'No Caves log output yet.'}</pre>
+        <div class="task-actions">
+          <button type="button" class="secondary-action" disabled={runtimeLogState.loading.Caves} on:click={() => toggleRuntimeLogs('Caves')}>
+            {runtimeLogButtonLabel('Caves')}
+          </button>
+          {#if runtimeLogState.expanded.Caves}
+            <button type="button" class="secondary-action" disabled={runtimeLogState.loading.Caves} on:click={() => loadRuntimeLogs('Caves')}>
+              {runtimeLogState.loading.Caves ? 'Refreshing Caves Logs' : 'Refresh Caves Logs'}
+            </button>
+          {/if}
+        </div>
+        {#if runtimeLogState.expanded.Caves}
+          {#if runtimeLogState.errors.Caves}
+            <p class="task-error">{runtimeLogState.errors.Caves}</p>
+          {:else}
+            <pre class="log-output">{runtimeLogState.logs.Caves?.length ? runtimeLogState.logs.Caves.join('\n') : 'No Caves log output yet.'}</pre>
+          {/if}
+        {/if}
       </article>
     </div>
   </section>

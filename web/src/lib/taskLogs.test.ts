@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { activeExpandedTaskIDs, expandedTaskIDs, taskLogButtonLabel } from './taskLogs';
+import { activeExpandedLogIDsFor, activeExpandedTaskIDs, expandedLogIDs, expandedTaskIDs, taskLogButtonLabel } from './taskLogs';
 
 describe('taskLogButtonLabel', () => {
   it('shows loading while a request is in flight', () => {
@@ -33,6 +33,10 @@ describe('taskLogButtonLabel', () => {
 });
 
 describe('expandedTaskIDs', () => {
+  it('returns expanded ids for generic log panels', () => {
+    expect(expandedLogIDs({ Master: true, Caves: false, Extra: true }, [{ id: 'Master' }, { id: 'Caves' }])).toEqual(['Master']);
+  });
+
   it('returns only ids whose panels are expanded', () => {
     expect(expandedTaskIDs({ 'task-1': true, 'task-2': false, 'task-3': true }, [{ id: 'task-1' }, { id: 'task-2' }, { id: 'task-3' }])).toEqual([
       'task-1',
@@ -46,6 +50,17 @@ describe('expandedTaskIDs', () => {
 });
 
 describe('activeExpandedTaskIDs', () => {
+  it('returns expanded generic log ids that still match the activity predicate', () => {
+    expect(activeExpandedLogIDsFor(
+      { Master: true, Caves: true, Extra: true },
+      [
+        { id: 'Master', running: true },
+        { id: 'Caves', running: false }
+      ],
+      (item) => 'running' in item && item.running
+    )).toEqual(['Master']);
+  });
+
   it('returns only expanded tasks that are still active', () => {
     expect(activeExpandedTaskIDs(
       { 'task-1': true, 'task-2': true, 'task-3': true, 'task-4': false },

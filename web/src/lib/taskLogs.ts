@@ -18,7 +18,7 @@ export type SingleLogPanelState = {
   error: string;
 };
 
-export type KeyedTaskLogCollectionState = {
+export type KeyedLogCollectionState = {
   logs: Record<string, string[]>;
   loading: Record<string, boolean>;
   errors: Record<string, string>;
@@ -37,6 +37,10 @@ type TaskLogTask = {
   status?: string;
 };
 
+type ExpandedItem = {
+  id: string;
+};
+
 export function taskLogButtonLabel(state: LogButtonState, labels: LogButtonLabels = defaultLogButtonLabels) {
   if (state.loading) {
     return labels.loading;
@@ -50,12 +54,34 @@ export function taskLogButtonLabel(state: LogButtonState, labels: LogButtonLabel
   return labels.view;
 }
 
+export function expandedLogIDs<T extends ExpandedItem>(expanded: Record<string, boolean>, items: T[]) {
+  return items.filter((item) => expanded[item.id]).map((item) => item.id);
+}
+
 export function expandedTaskIDs(expanded: Record<string, boolean>, tasks: TaskLogTask[]) {
-  return tasks.filter((task) => expanded[task.id]).map((task) => task.id);
+  return expandedLogIDs(expanded, tasks);
+}
+
+export function activeExpandedLogIDs(
+  expanded: Record<string, boolean>,
+  items: ExpandedItem[],
+  isActive: (item: ExpandedItem) => boolean
+) {
+  return items
+    .filter((item) => expanded[item.id] && isActive(item))
+    .map((item) => item.id);
+}
+
+export function activeExpandedLogIDsFor<T extends ExpandedItem>(
+  expanded: Record<string, boolean>,
+  items: T[],
+  isActive: (item: T) => boolean
+) {
+  return items
+    .filter((item) => expanded[item.id] && isActive(item))
+    .map((item) => item.id);
 }
 
 export function activeExpandedTaskIDs(expanded: Record<string, boolean>, tasks: TaskLogTask[]) {
-  return tasks
-    .filter((task) => expanded[task.id] && (task.status === 'pending' || task.status === 'running'))
-    .map((task) => task.id);
+  return activeExpandedLogIDsFor(expanded, tasks, (task) => task.status === 'pending' || task.status === 'running');
 }
