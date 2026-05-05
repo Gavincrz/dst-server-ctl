@@ -20,3 +20,5 @@ data/
 *.db-shm
 *.db-wal
 
+# Local agent workspace
+.codex
