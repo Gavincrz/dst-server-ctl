@@ -9,9 +9,9 @@
     type ClusterFormState
   } from './lib/clusterForm';
   import { closeLogStream, connectLogStream, type EventSourceLike } from './lib/logStream';
+  import { activeTaskPollIntervalMs, runtimeOnlyPollIntervalMs, statusPollIntervalMs } from './lib/statusPolling';
   import { activeExpandedLogIDs, activeExpandedTaskIDs, taskLogButtonLabel, type KeyedLogCollectionState, type SingleLogPanelState } from './lib/taskLogs';
 
-  const installPollIntervalMs = 3000;
   const taskLogLineLimit = 160;
   const runtimeLogLineLimit = 120;
 
@@ -139,6 +139,9 @@
   const taskLogSources: Record<TaskLogKind, Partial<Record<string, EventSourceLike>>> = { install: {}, update: {} };
   let updateCheckLogSource: EventSourceLike | null = null;
   const runtimeLogSources: Partial<Record<RuntimeShardLogKind, EventSourceLike>> = {};
+  let pollTimer: ReturnType<typeof setTimeout> | null = null;
+  let pollTimerDelayMs: number | null = null;
+  let pollingMounted = false;
 
   async function fetchJSON<T>(path: string): Promise<T> {
     const response = await fetch(path);
@@ -282,6 +285,64 @@
 
   function refreshNow() {
     void refresh();
+  }
+
+  function currentStatusPollIntervalMs() {
+    return statusPollIntervalMs({
+      hasActiveInstallTasks: hasActiveInstallTasks(installTasks),
+      hasActiveUpdateTasks: hasActiveUpdateTasks(updateTasks),
+      runtimeRunning: runtimeRunning(runtime),
+      installSubmitting,
+      updateSubmitting,
+      updateCheckSubmitting,
+      runtimeSubmitting,
+      polling
+    });
+  }
+
+  function clearPollTimer() {
+    if (!pollTimer) {
+      return;
+    }
+
+    clearTimeout(pollTimer);
+    pollTimer = null;
+    pollTimerDelayMs = null;
+  }
+
+  async function runScheduledRefresh() {
+    pollTimer = null;
+    pollTimerDelayMs = null;
+
+    if (currentStatusPollIntervalMs() === null) {
+      scheduleStatusPolling();
+      return;
+    }
+
+    await refresh({ background: true });
+    scheduleStatusPolling();
+  }
+
+  function scheduleStatusPolling() {
+    if (!pollingMounted) {
+      return;
+    }
+
+    const nextDelay = currentStatusPollIntervalMs();
+    if (nextDelay === null) {
+      clearPollTimer();
+      return;
+    }
+
+    if (pollTimer && pollTimerDelayMs === nextDelay) {
+      return;
+    }
+
+    clearPollTimer();
+    pollTimerDelayMs = nextDelay;
+    pollTimer = setTimeout(() => {
+      void runScheduledRefresh();
+    }, nextDelay);
   }
 
   function formatDate(value?: string | null) {
@@ -450,7 +511,7 @@
 
     const currentTask = activeTask(tasks);
     if (currentTask?.status === 'running') {
-      return `${taskTypeLabel(currentTask.type)} is currently running. Progress refreshes automatically every 3 seconds.`;
+      return `${taskTypeLabel(currentTask.type)} is currently running. Progress refreshes automatically every ${activeTaskPollIntervalMs / 1000} seconds.`;
     }
     if (currentTask?.status === 'pending') {
       return `${taskTypeLabel(currentTask.type)} is waiting for the current install step to finish.`;
@@ -1294,30 +1355,20 @@
     }
   }
 
+  $: scheduleStatusPolling();
+
   onMount(() => {
-    let pollTimer: ReturnType<typeof setInterval> | null = null;
+    pollingMounted = true;
 
     void refreshNow();
-    pollTimer = setInterval(() => {
-      if (
-        (!hasActiveInstallTasks(installTasks) && !hasActiveUpdateTasks(updateTasks) && !runtimeRunning(runtime)) ||
-        installSubmitting ||
-        updateSubmitting ||
-        updateCheckSubmitting ||
-        runtimeSubmitting
-      ) {
-        return;
-      }
-      void refresh({ background: true });
-    }, installPollIntervalMs);
+    scheduleStatusPolling();
 
     return () => {
+      pollingMounted = false;
+      clearPollTimer();
       closeAllTaskLogStreams();
       closeUpdateCheckLogStream();
       closeAllRuntimeLogStreams();
-      if (pollTimer) {
-        clearInterval(pollTimer);
-      }
     };
   });
 </script>
