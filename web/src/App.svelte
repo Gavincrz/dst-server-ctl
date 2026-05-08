@@ -9,6 +9,7 @@
     type ClusterFormState
   } from './lib/clusterForm';
   import { closeLogStream, connectLogStream, type EventSourceLike } from './lib/logStream';
+  import { closeStatusStream, connectStatusStream } from './lib/statusStream';
   import { activeTaskPollIntervalMs, runtimeOnlyPollIntervalMs, statusPollIntervalMs } from './lib/statusPolling';
   import { activeExpandedLogIDs, activeExpandedTaskIDs, taskLogButtonLabel, type KeyedLogCollectionState, type SingleLogPanelState } from './lib/taskLogs';
 
@@ -83,6 +84,17 @@
     createdAt: string;
   };
 
+  type DashboardResponse = {
+    controller: ControllerStatus;
+    installation: InstallationStatus;
+    updates: UpdateStatus;
+    cluster: ClusterConfig;
+    runtime: RuntimeStatus;
+    installTasks: InstallationTask[];
+    updateTasks: InstallationTask[];
+    runtimeHistory: RuntimeHistoryEvent[];
+  };
+
   type TaskLogKind = 'install' | 'update';
   type RuntimeShardLogKind = 'Master' | 'Caves';
 
@@ -139,6 +151,7 @@
   const taskLogSources: Record<TaskLogKind, Partial<Record<string, EventSourceLike>>> = { install: {}, update: {} };
   let updateCheckLogSource: EventSourceLike | null = null;
   const runtimeLogSources: Partial<Record<RuntimeShardLogKind, EventSourceLike>> = {};
+  let dashboardSource: EventSourceLike | null = null;
   let pollTimer: ReturnType<typeof setTimeout> | null = null;
   let pollTimerDelayMs: number | null = null;
   let pollingMounted = false;
@@ -188,6 +201,14 @@
     updateTaskLogState = state;
   }
 
+  function dashboardEndpoint() {
+    return '/api/v1/dashboard';
+  }
+
+  function dashboardStreamEndpoint() {
+    return '/api/v1/dashboard/stream';
+  }
+
   function taskLogEndpoint(kind: TaskLogKind, taskID: string) {
     return kind === 'install'
       ? `/api/v1/install/tasks/${taskID}/logs?lines=${taskLogLineLimit}`
@@ -235,41 +256,20 @@
     refreshError = '';
 
     try {
-      const [controllerStatus, installationStatus, updateStatus, clusterConfig, runtimeStatus, installTaskStatus, updateTaskStatus, history] = await Promise.all([
-        fetchJSON<ControllerStatus>('/api/v1/status'),
-        fetchJSON<InstallationStatus>('/api/v1/installation'),
-        fetchJSON<UpdateStatus>('/api/v1/update'),
-        fetchJSON<ClusterConfig>('/api/v1/cluster'),
-        fetchJSON<RuntimeStatus>('/api/v1/runtime'),
-        fetchJSON<InstallationTask[]>('/api/v1/install/tasks'),
-        fetchJSON<InstallationTask[]>('/api/v1/update/tasks'),
-        fetchJSON<RuntimeHistoryEvent[]>('/api/v1/runtime/history?limit=12')
-      ]);
+      const payload = await fetchJSON<DashboardResponse>(dashboardEndpoint());
+      applyDashboardSnapshot(payload);
 
-      const previousCluster = cluster;
-      controller = controllerStatus;
-      installation = installationStatus;
-      updates = updateStatus;
-      cluster = clusterConfig;
-      runtime = runtimeStatus;
-      runtimeHistory = history;
-      installTasks = installTaskStatus;
-      updateTasks = updateTaskStatus;
-      if (!clusterForm || !previousCluster || !clusterFormIsDirty(clusterForm, previousCluster)) {
-        clusterForm = clusterFormFromConfig(clusterConfig);
+      if (!supportsEventSource() && activeExpandedTaskIDs(installTaskLogState.expanded, payload.installTasks).length > 0) {
+        await refreshTaskLogs('install', payload.installTasks);
       }
-
-      if (!supportsEventSource() && activeExpandedTaskIDs(installTaskLogState.expanded, installTaskStatus).length > 0) {
-        await refreshTaskLogs('install', installTaskStatus);
-      }
-      if (!supportsEventSource() && activeExpandedTaskIDs(updateTaskLogState.expanded, updateTaskStatus).length > 0) {
-        await refreshTaskLogs('update', updateTaskStatus);
+      if (!supportsEventSource() && activeExpandedTaskIDs(updateTaskLogState.expanded, payload.updateTasks).length > 0) {
+        await refreshTaskLogs('update', payload.updateTasks);
       }
       if (!supportsEventSource() && updateCheckLogState.expanded) {
         await refreshUpdateCheckLogs();
       }
       if (!supportsEventSource() && activeExpandedLogIDs(runtimeLogState.expanded, [{ id: 'Master' }, { id: 'Caves' }], () => true).length > 0) {
-        await refreshRuntimeLogs(runtimeStatus);
+        await refreshRuntimeLogs(payload.runtime);
       }
       refreshedAt = new Date();
     } catch (err) {
@@ -287,7 +287,26 @@
     void refresh();
   }
 
+  function applyDashboardSnapshot(payload: DashboardResponse) {
+    const previousCluster = cluster;
+    controller = payload.controller;
+    installation = payload.installation;
+    updates = payload.updates;
+    cluster = payload.cluster;
+    runtime = payload.runtime;
+    runtimeHistory = payload.runtimeHistory;
+    installTasks = payload.installTasks;
+    updateTasks = payload.updateTasks;
+    if (!clusterForm || !previousCluster || !clusterFormIsDirty(clusterForm, previousCluster)) {
+      clusterForm = clusterFormFromConfig(payload.cluster);
+    }
+  }
+
   function currentStatusPollIntervalMs() {
+    if (supportsEventSource()) {
+      return null;
+    }
+
     return statusPollIntervalMs({
       hasActiveInstallTasks: hasActiveInstallTasks(installTasks),
       hasActiveUpdateTasks: hasActiveUpdateTasks(updateTasks),
@@ -697,6 +716,15 @@
       () => updateCheckLogSource,
       (source) => {
         updateCheckLogSource = source;
+      }
+    );
+  }
+
+  function closeDashboardStream() {
+    closeStatusStream(
+      () => dashboardSource,
+      (source) => {
+        dashboardSource = source;
       }
     );
   }
@@ -1355,17 +1383,53 @@
     }
   }
 
+  function connectDashboardStatusStream() {
+    connectStatusStream<DashboardResponse>({
+      url: dashboardStreamEndpoint(),
+      current: () => dashboardSource,
+      replace: (source) => {
+        dashboardSource = source;
+      },
+      createEventSource: supportsEventSource() ? (url) => new EventSource(url) : null,
+      loadFallback: () => refresh({ background: true }),
+      onSnapshot: (payload) => {
+        applyDashboardSnapshot(payload);
+        refreshedAt = new Date();
+        refreshError = '';
+        loading = false;
+        polling = false;
+      },
+      onStreamError: (message) => {
+        refreshError = message;
+        loading = false;
+        polling = false;
+      },
+      onDisconnect: (message) => {
+        refreshError = message;
+        loading = false;
+        polling = false;
+      },
+      unavailableMessage: 'Dashboard stream unavailable',
+      disconnectedMessage: 'Dashboard stream disconnected. Retrying...'
+    });
+  }
+
   $: scheduleStatusPolling();
 
   onMount(() => {
     pollingMounted = true;
 
-    void refreshNow();
-    scheduleStatusPolling();
+    if (supportsEventSource()) {
+      connectDashboardStatusStream();
+    } else {
+      void refreshNow();
+      scheduleStatusPolling();
+    }
 
     return () => {
       pollingMounted = false;
       clearPollTimer();
+      closeDashboardStream();
       closeAllTaskLogStreams();
       closeUpdateCheckLogStream();
       closeAllRuntimeLogStreams();

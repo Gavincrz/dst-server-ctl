@@ -94,6 +94,80 @@ func TestUpdateStatusEndpoint(t *testing.T) {
 	}
 }
 
+func TestDashboardEndpoint(t *testing.T) {
+	checkedAt := time.Date(2026, 4, 27, 1, 0, 0, 0, time.UTC)
+	router := NewRouter(testLogger(), Services{
+		Status: fakeStatusReader{},
+		Installation: fakeInstallationStatusReader{
+			state: domain.InstallationState{
+				ManagedRoot: "/srv/dst-server-ctl",
+			},
+		},
+		Updates: &fakeUpdateService{
+			state: domain.UpdateState{
+				CurrentVersion:  "100",
+				LatestVersion:   "101",
+				UpdateAvailable: true,
+				LastCheckedAt:   &checkedAt,
+				CreatedAt:       checkedAt.Add(-time.Hour),
+				UpdatedAt:       checkedAt,
+			},
+		},
+		Cluster: fakeClusterConfigService{
+			config: domain.ClusterConfig{
+				ClusterName: "Test",
+				Shards: []domain.ShardConfig{
+					{Name: domain.ShardMaster, Enabled: true},
+				},
+			},
+		},
+		InstallTasks: fakeInstallationTaskService{
+			tasks: []domain.Task{{ID: "install-1", Status: domain.TaskStatusSucceeded}},
+		},
+		Runtime: fakeRuntimeService{
+			status: domain.RuntimeStatus{
+				Status: domain.ServerStatusRunning,
+				Shards: []domain.ShardState{{Name: domain.ShardMaster, Running: true, PID: 1234}},
+			},
+		},
+		RuntimeHistory: fakeRuntimeHistoryService{
+			events: []domain.RuntimeEvent{{ID: 1, Shard: domain.ShardMaster, Kind: domain.RuntimeEventStarted, Detail: "started", CreatedAt: checkedAt}},
+		},
+	})
+
+	request := httptest.NewRequest(nethttp.MethodGet, "/api/v1/dashboard", nil)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	if response.Code != nethttp.StatusOK {
+		t.Fatalf("status = %d, want %d", response.Code, nethttp.StatusOK)
+	}
+
+	var payload dashboardResponse
+	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode response error = %v", err)
+	}
+
+	if payload.Controller.Version != "test" {
+		t.Fatalf("controller.version = %q, want test", payload.Controller.Version)
+	}
+	if payload.Installation.ManagedRoot != "/srv/dst-server-ctl" {
+		t.Fatalf("installation.managedRoot = %q, want /srv/dst-server-ctl", payload.Installation.ManagedRoot)
+	}
+	if !payload.Updates.UpdateAvailable {
+		t.Fatal("updates.updateAvailable = false, want true")
+	}
+	if payload.Runtime.Status != "running" {
+		t.Fatalf("runtime.status = %q, want running", payload.Runtime.Status)
+	}
+	if len(payload.InstallTasks) != 1 {
+		t.Fatalf("installTasks = %#v, want one task", payload.InstallTasks)
+	}
+	if len(payload.RuntimeHistory) != 1 {
+		t.Fatalf("runtimeHistory = %#v, want one event", payload.RuntimeHistory)
+	}
+}
+
 func TestUpdateCheckEndpoint(t *testing.T) {
 	router := NewRouter(testLogger(), Services{
 		Status:       fakeStatusReader{},
@@ -902,6 +976,74 @@ func TestRuntimeLogStreamEndpoint(t *testing.T) {
 	}
 }
 
+func TestDashboardStreamEndpoint(t *testing.T) {
+	previousActive := dashboardStreamActivePollInterval
+	previousRuntimeOnly := dashboardStreamRuntimeOnlyPollInterval
+	previousIdle := dashboardStreamIdlePollInterval
+	dashboardStreamActivePollInterval = 20 * time.Millisecond
+	dashboardStreamRuntimeOnlyPollInterval = 20 * time.Millisecond
+	dashboardStreamIdlePollInterval = 20 * time.Millisecond
+	defer func() {
+		dashboardStreamActivePollInterval = previousActive
+		dashboardStreamRuntimeOnlyPollInterval = previousRuntimeOnly
+		dashboardStreamIdlePollInterval = previousIdle
+	}()
+
+	router := NewRouter(testLogger(), Services{
+		Status: fakeStatusReader{},
+		Installation: fakeInstallationStatusReader{
+			state: domain.InstallationState{ManagedRoot: "/srv/dst-server-ctl"},
+		},
+		Updates: &fakeUpdateService{},
+		Cluster: fakeClusterConfigService{
+			config: domain.ClusterConfig{
+				ClusterName: "Test",
+				Shards:      []domain.ShardConfig{{Name: domain.ShardMaster, Enabled: true}},
+			},
+		},
+		InstallTasks: &streamingInstallationTaskService{
+			snapshots: [][]domain.Task{
+				{{ID: "install-1", Status: domain.TaskStatusRunning, Detail: "Installing"}},
+				{{ID: "install-1", Status: domain.TaskStatusSucceeded, Detail: "Installed"}},
+			},
+		},
+		Runtime:        fakeRuntimeService{},
+		RuntimeHistory: fakeRuntimeHistoryService{},
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	request := httptest.NewRequest(nethttp.MethodGet, "/api/v1/dashboard/stream", nil).WithContext(ctx)
+	response := httptest.NewRecorder()
+	done := make(chan struct{})
+	go func() {
+		router.ServeHTTP(response, request)
+		close(done)
+	}()
+
+	deadline := time.Now().Add(500 * time.Millisecond)
+	for strings.Count(response.Body.String(), "event: snapshot") < 2 {
+		if time.Now().After(deadline) {
+			cancel()
+			<-done
+			t.Fatalf("stream body = %q, want two snapshot events", response.Body.String())
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	cancel()
+	<-done
+
+	body := response.Body.String()
+	if !strings.Contains(body, "\"status\":\"running\"") {
+		t.Fatalf("stream body = %q, want running task snapshot", body)
+	}
+	if !strings.Contains(body, "\"status\":\"succeeded\"") {
+		t.Fatalf("stream body = %q, want succeeded task snapshot", body)
+	}
+}
+
 func TestRuntimeHistoryEndpoint(t *testing.T) {
 	router := NewRouter(testLogger(), Services{
 		Status:       fakeStatusReader{},
@@ -957,6 +1099,11 @@ type fakeInstallationTaskService struct {
 	listErr      error
 	startedTasks []domain.Task
 	startErr     error
+}
+
+type streamingInstallationTaskService struct {
+	snapshots [][]domain.Task
+	calls     int
 }
 
 type fakeUpdateService struct {
@@ -1033,11 +1180,28 @@ func (s fakeInstallationTaskService) ListTasks(context.Context) ([]domain.Task, 
 	return s.tasks, nil
 }
 
+func (s *streamingInstallationTaskService) ListTasks(context.Context) ([]domain.Task, error) {
+	if len(s.snapshots) == 0 {
+		return []domain.Task{}, nil
+	}
+	if s.calls >= len(s.snapshots) {
+		return s.snapshots[len(s.snapshots)-1], nil
+	}
+
+	tasks := s.snapshots[s.calls]
+	s.calls++
+	return tasks, nil
+}
+
 func (s fakeInstallationTaskService) Start(context.Context) ([]domain.Task, error) {
 	if s.startErr != nil {
 		return nil, s.startErr
 	}
 	return s.startedTasks, nil
+}
+
+func (s *streamingInstallationTaskService) Start(context.Context) ([]domain.Task, error) {
+	return nil, nil
 }
 
 func (s fakeUpdateService) Status(context.Context) (domain.UpdateState, error) {

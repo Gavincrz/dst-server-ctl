@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"reflect"
 	"time"
 
 	"dst-server-ctl/internal/domain"
@@ -89,6 +90,80 @@ func NewRouter(logger *slog.Logger, services Services) http.Handler {
 
 	mux.HandleFunc("GET /api/v1/status", func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, services.Status.Status())
+	})
+
+	mux.HandleFunc("GET /api/v1/dashboard", func(w http.ResponseWriter, r *http.Request) {
+		payload, err := loadDashboardResponse(r.Context(), services)
+		if err != nil {
+			logger.Error("dashboard failed", "error", err)
+			respondError(w, http.StatusInternalServerError, "dashboard unavailable")
+			return
+		}
+
+		respondJSON(w, payload)
+	})
+
+	mux.HandleFunc("GET /api/v1/dashboard/stream", func(w http.ResponseWriter, r *http.Request) {
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			respondError(w, http.StatusInternalServerError, "streaming unsupported")
+			return
+		}
+
+		payload, err := loadDashboardResponse(r.Context(), services)
+		if err != nil {
+			logger.Error("dashboard stream failed", "error", err)
+			respondError(w, http.StatusInternalServerError, "dashboard unavailable")
+			return
+		}
+
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Connection", "keep-alive")
+
+		if err := writeSSEEvent(w, "snapshot", payload); err != nil {
+			logger.Debug("dashboard stream initial write failed", "error", err)
+			return
+		}
+		flusher.Flush()
+
+		previous := payload
+		timer := time.NewTimer(dashboardStreamInterval(payload))
+		heartbeat := time.NewTicker(15 * time.Second)
+		defer timer.Stop()
+		defer heartbeat.Stop()
+
+		for {
+			select {
+			case <-r.Context().Done():
+				return
+			case <-heartbeat.C:
+				if _, err := io.WriteString(w, ": keep-alive\n\n"); err != nil {
+					logger.Debug("dashboard stream heartbeat failed", "error", err)
+					return
+				}
+				flusher.Flush()
+			case <-timer.C:
+				current, err := loadDashboardResponse(r.Context(), services)
+				if err != nil {
+					logger.Error("dashboard stream refresh failed", "error", err)
+					_ = writeSSEEvent(w, "stream-error", map[string]string{"error": "dashboard unavailable"})
+					flusher.Flush()
+					return
+				}
+
+				if !reflect.DeepEqual(previous, current) {
+					if err := writeSSEEvent(w, "snapshot", current); err != nil {
+						logger.Debug("dashboard stream write failed", "error", err)
+						return
+					}
+					flusher.Flush()
+					previous = current
+				}
+
+				timer.Reset(dashboardStreamInterval(current))
+			}
+		}
 	})
 
 	mux.HandleFunc("GET /api/v1/installation", func(w http.ResponseWriter, r *http.Request) {
@@ -531,6 +606,77 @@ func NewRouter(logger *slog.Logger, services Services) http.Handler {
 	return mux
 }
 
+var dashboardStreamActivePollInterval = 3 * time.Second
+var dashboardStreamRuntimeOnlyPollInterval = 10 * time.Second
+var dashboardStreamIdlePollInterval = 30 * time.Second
+
+func loadDashboardResponse(ctx context.Context, services Services) (dashboardResponse, error) {
+	installation, err := services.Installation.Status(ctx)
+	if err != nil {
+		return dashboardResponse{}, err
+	}
+
+	updates, err := services.Updates.Status(ctx)
+	if err != nil {
+		return dashboardResponse{}, err
+	}
+
+	cluster, err := services.Cluster.Get(ctx)
+	if err != nil {
+		return dashboardResponse{}, err
+	}
+
+	runtime, err := services.Runtime.Status(ctx)
+	if err != nil {
+		return dashboardResponse{}, err
+	}
+
+	installTasks, err := services.InstallTasks.ListTasks(ctx)
+	if err != nil {
+		return dashboardResponse{}, err
+	}
+
+	updateTasks, err := services.Updates.ListTasks(ctx)
+	if err != nil {
+		return dashboardResponse{}, err
+	}
+
+	runtimeHistory, err := services.RuntimeHistory.List(ctx, 12)
+	if err != nil {
+		return dashboardResponse{}, err
+	}
+
+	return dashboardResponse{
+		Controller:     services.Status.Status(),
+		Installation:   installationResponseFromDomain(installation),
+		Updates:        updateResponseFromDomain(updates),
+		Cluster:        clusterResponseFromDomain(cluster),
+		Runtime:        runtimeResponseFromDomain(runtime),
+		InstallTasks:   taskListResponseFromDomain(installTasks),
+		UpdateTasks:    taskListResponseFromDomain(updateTasks),
+		RuntimeHistory: runtimeHistoryResponseFromDomain(runtimeHistory),
+	}, nil
+}
+
+func dashboardStreamInterval(payload dashboardResponse) time.Duration {
+	if hasActiveTaskResponse(payload.InstallTasks) || hasActiveTaskResponse(payload.UpdateTasks) {
+		return dashboardStreamActivePollInterval
+	}
+	if payload.Runtime.Status == string(domain.ServerStatusRunning) {
+		return dashboardStreamRuntimeOnlyPollInterval
+	}
+	return dashboardStreamIdlePollInterval
+}
+
+func hasActiveTaskResponse(tasks []taskResponse) bool {
+	for _, task := range tasks {
+		if task.Status == string(domain.TaskStatusPending) || task.Status == string(domain.TaskStatusRunning) {
+			return true
+		}
+	}
+	return false
+}
+
 func respondJSON(w http.ResponseWriter, payload any) {
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(payload); err != nil {
@@ -745,6 +891,17 @@ type runtimeHistoryEventResponse struct {
 	Kind      string    `json:"kind"`
 	Detail    string    `json:"detail"`
 	CreatedAt time.Time `json:"createdAt"`
+}
+
+type dashboardResponse struct {
+	Controller     domain.Status                 `json:"controller"`
+	Installation   installationResponse          `json:"installation"`
+	Updates        updateResponse                `json:"updates"`
+	Cluster        clusterResponse               `json:"cluster"`
+	Runtime        runtimeResponse               `json:"runtime"`
+	InstallTasks   []taskResponse                `json:"installTasks"`
+	UpdateTasks    []taskResponse                `json:"updateTasks"`
+	RuntimeHistory []runtimeHistoryEventResponse `json:"runtimeHistory"`
 }
 
 type updateClusterRequest struct {
