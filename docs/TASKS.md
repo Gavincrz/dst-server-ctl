@@ -35,12 +35,13 @@
 - [x] 为日志 SSE 补充前端交互测试和断线/回退场景覆盖，防止后续重构破坏连接管理。
 - [x] 把日志 SSE 的服务端读取改成基于文件 offset 的增量读取，避免连接期间每秒重读整段最近日志窗口。
 - [x] 把前端普通状态轮询改成分级调度：安装/更新活跃时保持 3 秒，只有运行态时降到更低频率，空闲时不轮询。
+- [x] 评估日志 SSE 是否需要继续升级为 file watcher 驱动 tail，并记录“暂不实现、保留低频 poll fallback”的结论和触发条件。
 
 当前项目已有 harness、工程骨架、managed root 路径布局、共享 command runner、SQLite 状态存储基础层、启动时 managed root 初始化、安装状态 API、安装任务 API、任务模型、由任务驱动的 SteamCMD/DST 安装执行流程、初始化状态页、可反映控制器启动时间的基础运行状态、受管 cluster 的结构化配置状态和 `GET/PUT /api/v1/cluster` 读写 API、由该状态生成的基础 `cluster.ini` 与 shard `server.ini` 文件输出、接入 Web UI 的 cluster 配置表单/保存/重置和前端测试、基于 managed root `clusters/primary` 布局的 DST shard 启动命令生成与运行时启动 service、`GET /api/v1/runtime`、`POST /api/v1/runtime/start`、`POST /api/v1/runtime/stop`、`POST /api/v1/runtime/restart` 与对应的运行态 Web 控制面板、写入 `logs/master.log`/`logs/caves.log` 的 shard 日志落盘、最近日志读取 API 和日志展示面板、shard 异常退出后的自动状态清理与错误回传、基于启动时配置快照的 `restartRequired` 判定、持久化到 SQLite 的 runtime history 与一次自动重试策略，以及带有本地/远端版本比较、手动检查、手动更新、启动后定时检查、运行中更新保护、停服确认、更新任务日志读取/失败排查入口、安装任务日志查看入口、安装/更新任务展开日志自动刷新、活跃任务过滤、统一日志面板刷新抽象、runtime shard 日志面板统一展开/刷新交互、runtime/安装/更新/版本检查日志 SSE 持续推流、基于文件 offset 的服务端增量日志读取、前端普通状态轮询分级降频、前端 SSE 连接/断线/回退测试和版本检查日志落盘/排查入口的 DST 更新流程。
 
 ## 下一任务
 
-- [ ] 评估是否需要把当前基于定时 poll + offset 增量读取的日志 SSE 再演进为 file watcher 驱动的 tail，并明确文件轮转/重建时的处理策略。
+- [ ] 评估是否把安装/更新任务列表、运行态总览和版本检查状态也改成 SSE 推送，进一步减少当前普通状态接口的定时刷新。
 
 ## 暂时不要做
 
@@ -61,6 +62,6 @@
 
 - 第一版公开发布时，`leveldataoverride.lua` 要做到多完整的可视化。
 - 启动流程接入后，cluster 配置变更与运行中 shard 的重载策略要不要区分“需重启”与“即时生效”。
-- 当前日志 SSE 已改成按秒检查文件并按 offset 读取新增内容，不再每次重读整段 tail；但它仍不是基于 file watcher 的真正事件驱动，后续可继续评估是否值得再复杂化。
+- 当前日志 SSE 已改成按秒检查文件并按 offset 读取新增内容；当前结论是暂不升级为 file watcher，但如果后续日志连接数、空转 IO 或实时性要求明显提高，再重新评估。
 - 当前 `restartRequired` 只基于 cluster 配置快照；后续如果 token、admin 列表、模组或世界设置接入运行态，也要纳入重启判定。
 - 当前自动重试策略只做每个 shard 一次立即重试，没有退避、上限策略或外部告警通道。

@@ -41,3 +41,33 @@ harness 采用短 `AGENTS.md`、当前架构文档、决策记录和任务跟踪
 
 - OpenAI harness engineering：https://openai.com/index/harness-engineering/
 - OpenAI Codex guide：https://openai.com/business/guides-and-resources/how-openai-uses-codex/
+
+## 日志 watcher 方案
+
+当前实现：
+
+- 日志 API 首次连接时读取最近窗口作为 `snapshot`。
+- 后续 SSE 连接每秒检查文件状态，并按文件 `offset` 只读取新增内容。
+- 文件被轮转、替换、删除重建时，服务端会退回发送新的 `snapshot`。
+
+候选方案对比：
+
+- 保持当前 `poll + offset`：
+  优点是实现简单、跨平台行为稳定、和现有 `domain.LogStream`/`adapter/logtail` 边界一致。
+  缺点是空闲连接仍有周期性 `stat`/`poll` 开销，日志推送延迟下限仍受轮询周期影响。
+- 改成 `file watcher + offset`：
+  优点是新增日志可更快推送，并把高频轮询降为低频兜底。
+  缺点是复杂度明显上升，需要处理 watcher 丢事件、队列溢出、文件轮转、不同平台语义差异和额外生命周期管理。
+
+当前结论：
+
+- 在本项目现阶段，`file watcher` 不是优先项。
+- 已经通过 `offset` 增量读取消除了最主要的重复 IO；继续上 watcher 的收益，主要是更低延迟和更少空转，而不是数量级上的架构改进。
+- 如果后续出现日志连接数明显增加、空转 IO 成本可见，或用户明确要求接近实时的子秒级日志推送，再考虑实现 watcher 驱动。
+
+若后续实现 watcher，建议边界：
+
+- `domain.LogStream` 接口保持不变，不把 watcher 细节泄漏到 `service` 或 `http`。
+- watcher 实现仍放在 `adapter/logtail`，和当前基于 `offset` 的文件读取共用同一份增量拼行逻辑。
+- 保留低频 fallback poll，处理 watcher 丢事件和文件替换场景。
+- 文件轮转、截断、删除重建统一视为日志源重置，对 SSE 发送新的 `snapshot`，不要尝试跨文件拼接旧上下文。
