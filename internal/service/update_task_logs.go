@@ -24,12 +24,15 @@ func (s *UpdateTaskLogService) Get(ctx context.Context, taskID domain.TaskID, ma
 	if taskID == "" {
 		return nil, fmt.Errorf("%w: task id is required", domain.ErrTaskNotFound)
 	}
-	if maxLines <= 0 {
-		maxLines = 200
-	}
-	if maxLines > 500 {
-		maxLines = 500
-	}
+	maxLines = normalizeLogLineLimit(maxLines)
 
 	return s.reader.ReadRecent(ctx, filepath.Join(s.layout.Logs, "update-"+string(taskID)+".log"), maxLines)
+}
+
+func (s *UpdateTaskLogService) Stream(taskID domain.TaskID, maxLines int) (domain.LogStream, error) {
+	if taskID == "" {
+		return nil, fmt.Errorf("%w: task id is required", domain.ErrTaskNotFound)
+	}
+
+	return s.reader.OpenStream(filepath.Join(s.layout.Logs, "update-"+string(taskID)+".log"), normalizeLogLineLimit(maxLines))
 }

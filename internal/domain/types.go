@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"context"
 	"errors"
 	"time"
 )
@@ -34,6 +35,18 @@ type ManagedLayout struct {
 	Clusters string
 	Logs     string
 	State    string
+}
+
+type LogStreamUpdate struct {
+	Lines   []string
+	Reset   bool
+	Changed bool
+}
+
+type LogStream interface {
+	Snapshot() []string
+	Poll(ctx context.Context) (LogStreamUpdate, error)
+	Close() error
 }
 
 type ServerStatus string

@@ -8,7 +8,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"slices"
 	"time"
 
 	"dst-server-ctl/internal/domain"
@@ -63,18 +62,22 @@ type RuntimeService interface {
 
 type InstallTaskLogService interface {
 	Get(ctx context.Context, taskID domain.TaskID, maxLines int) ([]string, error)
+	Stream(taskID domain.TaskID, maxLines int) (domain.LogStream, error)
 }
 
 type UpdateTaskLogService interface {
 	Get(ctx context.Context, taskID domain.TaskID, maxLines int) ([]string, error)
+	Stream(taskID domain.TaskID, maxLines int) (domain.LogStream, error)
 }
 
 type UpdateCheckLogService interface {
 	Get(ctx context.Context, maxLines int) ([]string, error)
+	Stream(maxLines int) (domain.LogStream, error)
 }
 
 type RuntimeLogService interface {
 	Get(ctx context.Context, shard domain.ShardName, maxLines int) ([]string, error)
+	Stream(shard domain.ShardName, maxLines int) (domain.LogStream, error)
 }
 
 type RuntimeHistoryService interface {
@@ -172,8 +175,8 @@ func NewRouter(logger *slog.Logger, services Services) http.Handler {
 			return
 		}
 
-		streamLogLines(w, r, logger, "update check logs", "update check logs unavailable", func(ctx context.Context) ([]string, error) {
-			return services.UpdateCheckLogs.Get(ctx, lines)
+		streamLogLines(w, r, logger, "update check logs", "update check logs unavailable", func() (domain.LogStream, error) {
+			return services.UpdateCheckLogs.Stream(lines)
 		}, func(err error) bool {
 			return false
 		}, func(entries []string) any {
@@ -317,8 +320,8 @@ func NewRouter(logger *slog.Logger, services Services) http.Handler {
 		}
 
 		taskID := domain.TaskID(r.PathValue("id"))
-		streamLogLines(w, r, logger, "install task logs", "install task logs unavailable", func(ctx context.Context) ([]string, error) {
-			return services.InstallTaskLogs.Get(ctx, taskID, lines)
+		streamLogLines(w, r, logger, "install task logs", "install task logs unavailable", func() (domain.LogStream, error) {
+			return services.InstallTaskLogs.Stream(taskID, lines)
 		}, func(err error) bool {
 			return errors.Is(err, domain.ErrTaskNotFound)
 		}, func(entries []string) any {
@@ -359,8 +362,8 @@ func NewRouter(logger *slog.Logger, services Services) http.Handler {
 		}
 
 		taskID := domain.TaskID(r.PathValue("id"))
-		streamLogLines(w, r, logger, "update task logs", "update task logs unavailable", func(ctx context.Context) ([]string, error) {
-			return services.UpdateTaskLogs.Get(ctx, taskID, lines)
+		streamLogLines(w, r, logger, "update task logs", "update task logs unavailable", func() (domain.LogStream, error) {
+			return services.UpdateTaskLogs.Stream(taskID, lines)
 		}, func(err error) bool {
 			return errors.Is(err, domain.ErrTaskNotFound)
 		}, func(entries []string) any {
@@ -482,79 +485,16 @@ func NewRouter(logger *slog.Logger, services Services) http.Handler {
 			return
 		}
 
-		flusher, ok := w.(http.Flusher)
-		if !ok {
-			respondError(w, http.StatusInternalServerError, "streaming unsupported")
-			return
-		}
-
-		w.Header().Set("Content-Type", "text/event-stream")
-		w.Header().Set("Cache-Control", "no-cache")
-		w.Header().Set("Connection", "keep-alive")
-
-		entries, err := services.RuntimeLogs.Get(r.Context(), shard, lines)
-		if errors.Is(err, domain.ErrInvalidShard) {
-			respondError(w, http.StatusBadRequest, err.Error())
-			return
-		}
-		if err != nil {
-			logger.Error("runtime log stream failed", "error", err, "shard", shard)
-			respondError(w, http.StatusInternalServerError, "runtime log stream unavailable")
-			return
-		}
-
-		if err := writeSSEEvent(w, "snapshot", runtimeLogResponse{
-			Shard: string(shard),
-			Lines: entries,
-		}); err != nil {
-			logger.Debug("runtime log stream initial write failed", "error", err, "shard", shard)
-			return
-		}
-		flusher.Flush()
-
-		ticker := time.NewTicker(time.Second)
-		heartbeat := time.NewTicker(15 * time.Second)
-		defer ticker.Stop()
-		defer heartbeat.Stop()
-
-		previous := slices.Clone(entries)
-		for {
-			select {
-			case <-r.Context().Done():
-				return
-			case <-heartbeat.C:
-				if _, err := io.WriteString(w, ": keep-alive\n\n"); err != nil {
-					logger.Debug("runtime log stream heartbeat failed", "error", err, "shard", shard)
-					return
-				}
-				flusher.Flush()
-			case <-ticker.C:
-				current, err := services.RuntimeLogs.Get(r.Context(), shard, lines)
-				if errors.Is(err, domain.ErrInvalidShard) {
-					return
-				}
-				if err != nil {
-					logger.Error("runtime log stream refresh failed", "error", err, "shard", shard)
-					_ = writeSSEEvent(w, "stream-error", map[string]string{"error": "runtime log stream unavailable"})
-					flusher.Flush()
-					return
-				}
-
-				event, changedLines, changed := runtimeLogStreamEvent(previous, current)
-				if !changed {
-					continue
-				}
-				if err := writeSSEEvent(w, event, runtimeLogResponse{
-					Shard: string(shard),
-					Lines: changedLines,
-				}); err != nil {
-					logger.Debug("runtime log stream write failed", "error", err, "shard", shard)
-					return
-				}
-				flusher.Flush()
-				previous = slices.Clone(current)
+		streamLogLines(w, r, logger, "runtime log stream", "runtime log stream unavailable", func() (domain.LogStream, error) {
+			return services.RuntimeLogs.Stream(shard, lines)
+		}, func(err error) bool {
+			return errors.Is(err, domain.ErrInvalidShard)
+		}, func(entries []string) any {
+			return runtimeLogResponse{
+				Shard: string(shard),
+				Lines: entries,
 			}
-		}
+		}, "shard", shard)
 	})
 
 	mux.HandleFunc("GET /api/v1/runtime/history", func(w http.ResponseWriter, r *http.Request) {
@@ -628,31 +568,13 @@ func decodeRuntimeLogQuery(w http.ResponseWriter, r *http.Request) (domain.Shard
 	return shard, lines, true
 }
 
-func runtimeLogStreamEvent(previous []string, current []string) (string, []string, bool) {
-	if slices.Equal(previous, current) {
-		return "", nil, false
-	}
-	if len(previous) == 0 {
-		return "snapshot", current, true
-	}
-
-	maxOverlap := min(len(previous), len(current))
-	for overlap := maxOverlap; overlap > 0; overlap-- {
-		if slices.Equal(previous[len(previous)-overlap:], current[:overlap]) {
-			return "append", current[overlap:], true
-		}
-	}
-
-	return "snapshot", current, true
-}
-
 func streamLogLines(
 	w http.ResponseWriter,
 	r *http.Request,
 	logger *slog.Logger,
 	name string,
 	unavailableMessage string,
-	get func(ctx context.Context) ([]string, error),
+	open func() (domain.LogStream, error),
 	isBadRequest func(error) bool,
 	payload func([]string) any,
 	logAttrs ...any,
@@ -663,7 +585,7 @@ func streamLogLines(
 		return
 	}
 
-	entries, err := get(r.Context())
+	stream, err := open()
 	if isBadRequest(err) {
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
@@ -673,12 +595,13 @@ func streamLogLines(
 		respondError(w, http.StatusInternalServerError, unavailableMessage)
 		return
 	}
+	defer stream.Close()
 
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 
-	if err := writeSSEEvent(w, "snapshot", payload(entries)); err != nil {
+	if err := writeSSEEvent(w, "snapshot", payload(stream.Snapshot())); err != nil {
 		logger.Debug(name+" initial write failed", append([]any{"error", err}, logAttrs...)...)
 		return
 	}
@@ -689,7 +612,6 @@ func streamLogLines(
 	defer ticker.Stop()
 	defer heartbeat.Stop()
 
-	previous := slices.Clone(entries)
 	for {
 		select {
 		case <-r.Context().Done():
@@ -701,7 +623,7 @@ func streamLogLines(
 			}
 			flusher.Flush()
 		case <-ticker.C:
-			current, err := get(r.Context())
+			update, err := stream.Poll(r.Context())
 			if isBadRequest(err) {
 				return
 			}
@@ -712,17 +634,20 @@ func streamLogLines(
 				return
 			}
 
-			event, changedLines, changed := runtimeLogStreamEvent(previous, current)
-			if !changed {
+			if !update.Changed {
 				continue
 			}
 
-			if err := writeSSEEvent(w, event, payload(changedLines)); err != nil {
+			event := "append"
+			if update.Reset {
+				event = "snapshot"
+			}
+
+			if err := writeSSEEvent(w, event, payload(update.Lines)); err != nil {
 				logger.Debug(name+" write failed", append([]any{"error", err}, logAttrs...)...)
 				return
 			}
 			flusher.Flush()
-			previous = slices.Clone(current)
 		}
 	}
 }

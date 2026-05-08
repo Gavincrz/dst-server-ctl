@@ -9,7 +9,6 @@ import (
 	"log/slog"
 	nethttp "net/http"
 	"net/http/httptest"
-	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -352,10 +351,12 @@ func TestInstallTaskLogsEndpoint(t *testing.T) {
 
 func TestInstallTaskLogStreamEndpoint(t *testing.T) {
 	logs := &streamingTaskLogService{
-		snapshots: map[string][][]string{
-			"task-1": {
-				{"steamcmd: starting"},
-				{"steamcmd: starting", "steamcmd: downloading"},
+		streams: map[string]domain.LogStream{
+			"task-1": &fakeStreamingLogStream{
+				snapshot: []string{"steamcmd: starting"},
+				updates: []domain.LogStreamUpdate{
+					{Lines: []string{"steamcmd: downloading"}, Changed: true},
+				},
 			},
 		},
 	}
@@ -438,10 +439,12 @@ func TestUpdateTaskLogsEndpoint(t *testing.T) {
 
 func TestUpdateTaskLogStreamEndpoint(t *testing.T) {
 	logs := &streamingTaskLogService{
-		snapshots: map[string][][]string{
-			"task-2": {
-				{"steamcmd: updating"},
-				{"steamcmd: updating", "steamcmd: validating"},
+		streams: map[string]domain.LogStream{
+			"task-2": &fakeStreamingLogStream{
+				snapshot: []string{"steamcmd: updating"},
+				updates: []domain.LogStreamUpdate{
+					{Lines: []string{"steamcmd: validating"}, Changed: true},
+				},
 			},
 		},
 	}
@@ -521,9 +524,11 @@ func TestUpdateCheckLogsEndpoint(t *testing.T) {
 
 func TestUpdateCheckLogStreamEndpoint(t *testing.T) {
 	logs := &streamingUpdateCheckLogService{
-		snapshots: [][]string{
-			{"checking remote build"},
-			{"checking remote build", "buildid=12345"},
+		stream: &fakeStreamingLogStream{
+			snapshot: []string{"checking remote build"},
+			updates: []domain.LogStreamUpdate{
+				{Lines: []string{"buildid=12345"}, Changed: true},
+			},
 		},
 	}
 	router := NewRouter(testLogger(), Services{
@@ -841,9 +846,11 @@ func TestRuntimeLogsEndpoint(t *testing.T) {
 
 func TestRuntimeLogStreamEndpoint(t *testing.T) {
 	logs := &streamingRuntimeLogService{
-		snapshots: [][]string{
-			{"[00:00:01]: Boot"},
-			{"[00:00:01]: Boot", "[00:00:02]: Ready"},
+		stream: &fakeStreamingLogStream{
+			snapshot: []string{"[00:00:01]: Boot"},
+			updates: []domain.LogStreamUpdate{
+				{Lines: []string{"[00:00:02]: Ready"}, Changed: true},
+			},
 		},
 	}
 	router := NewRouter(testLogger(), Services{
@@ -892,23 +899,6 @@ func TestRuntimeLogStreamEndpoint(t *testing.T) {
 	}
 	if !strings.Contains(body, "[00:00:02]: Ready") {
 		t.Fatalf("stream body = %q, want appended log line", body)
-	}
-}
-
-func TestRuntimeLogStreamEventUsesAppendForSlidingTail(t *testing.T) {
-	event, lines, changed := runtimeLogStreamEvent(
-		[]string{"[00:00:01]: Boot", "[00:00:02]: Ready"},
-		[]string{"[00:00:02]: Ready", "[00:00:03]: Tick"},
-	)
-
-	if !changed {
-		t.Fatal("changed = false, want true")
-	}
-	if event != "append" {
-		t.Fatalf("event = %q, want append", event)
-	}
-	if got, want := lines, []string{"[00:00:03]: Tick"}; !slices.Equal(got, want) {
-		t.Fatalf("lines = %#v, want %#v", got, want)
 	}
 }
 
@@ -1002,18 +992,18 @@ type fakeRuntimeLogService struct {
 }
 
 type streamingRuntimeLogService struct {
-	snapshots [][]string
-	calls     int
+	stream domain.LogStream
+	err    error
 }
 
 type streamingTaskLogService struct {
-	snapshots map[string][][]string
-	calls     map[string]int
+	streams map[string]domain.LogStream
+	err     error
 }
 
 type streamingUpdateCheckLogService struct {
-	snapshots [][]string
-	calls     int
+	stream domain.LogStream
+	err    error
 }
 
 type fakeInstallTaskLogService struct {
@@ -1119,51 +1109,73 @@ func (s fakeRuntimeLogService) Get(context.Context, domain.ShardName, int) ([]st
 	return s.lines, nil
 }
 
+func (s fakeRuntimeLogService) Stream(domain.ShardName, int) (domain.LogStream, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &fakeStreamingLogStream{snapshot: s.lines}, nil
+}
+
 func (s *streamingRuntimeLogService) Get(context.Context, domain.ShardName, int) ([]string, error) {
-	if len(s.snapshots) == 0 {
+	if s.err != nil {
+		return nil, s.err
+	}
+	if s.stream == nil {
 		return []string{}, nil
 	}
-	if s.calls >= len(s.snapshots) {
-		return s.snapshots[len(s.snapshots)-1], nil
-	}
+	return s.stream.Snapshot(), nil
+}
 
-	lines := s.snapshots[s.calls]
-	s.calls++
-	return lines, nil
+func (s *streamingRuntimeLogService) Stream(domain.ShardName, int) (domain.LogStream, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	if s.stream == nil {
+		return &fakeStreamingLogStream{}, nil
+	}
+	return s.stream, nil
 }
 
 func (s *streamingTaskLogService) Get(_ context.Context, taskID domain.TaskID, _ int) ([]string, error) {
-	if s.calls == nil {
-		s.calls = map[string]int{}
+	if s.err != nil {
+		return nil, s.err
 	}
-
-	key := string(taskID)
-	snapshots := s.snapshots[key]
-	if len(snapshots) == 0 {
+	stream := s.streams[string(taskID)]
+	if stream == nil {
 		return []string{}, nil
 	}
+	return stream.Snapshot(), nil
+}
 
-	call := s.calls[key]
-	if call >= len(snapshots) {
-		return snapshots[len(snapshots)-1], nil
+func (s *streamingTaskLogService) Stream(taskID domain.TaskID, _ int) (domain.LogStream, error) {
+	if s.err != nil {
+		return nil, s.err
 	}
-
-	lines := snapshots[call]
-	s.calls[key] = call + 1
-	return lines, nil
+	stream := s.streams[string(taskID)]
+	if stream == nil {
+		return &fakeStreamingLogStream{}, nil
+	}
+	return stream, nil
 }
 
 func (s *streamingUpdateCheckLogService) Get(context.Context, int) ([]string, error) {
-	if len(s.snapshots) == 0 {
+	if s.err != nil {
+		return nil, s.err
+	}
+	if s.stream == nil {
 		return []string{}, nil
 	}
-	if s.calls >= len(s.snapshots) {
-		return s.snapshots[len(s.snapshots)-1], nil
-	}
+	return s.stream.Snapshot(), nil
+}
 
-	lines := s.snapshots[s.calls]
-	s.calls++
-	return lines, nil
+func (s *streamingUpdateCheckLogService) Stream(int) (domain.LogStream, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	if s.stream == nil {
+		return &fakeStreamingLogStream{}, nil
+	}
+	return s.stream, nil
 }
 
 func (s fakeInstallTaskLogService) Get(context.Context, domain.TaskID, int) ([]string, error) {
@@ -1173,11 +1185,25 @@ func (s fakeInstallTaskLogService) Get(context.Context, domain.TaskID, int) ([]s
 	return s.lines, nil
 }
 
+func (s fakeInstallTaskLogService) Stream(domain.TaskID, int) (domain.LogStream, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &fakeStreamingLogStream{snapshot: s.lines}, nil
+}
+
 func (s fakeUpdateTaskLogService) Get(context.Context, domain.TaskID, int) ([]string, error) {
 	if s.err != nil {
 		return nil, s.err
 	}
 	return s.lines, nil
+}
+
+func (s fakeUpdateTaskLogService) Stream(domain.TaskID, int) (domain.LogStream, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &fakeStreamingLogStream{snapshot: s.lines}, nil
 }
 
 func (s fakeUpdateCheckLogService) Get(context.Context, int) ([]string, error) {
@@ -1187,11 +1213,42 @@ func (s fakeUpdateCheckLogService) Get(context.Context, int) ([]string, error) {
 	return s.lines, nil
 }
 
+func (s fakeUpdateCheckLogService) Stream(int) (domain.LogStream, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &fakeStreamingLogStream{snapshot: s.lines}, nil
+}
+
 func (s fakeRuntimeHistoryService) List(context.Context, int) ([]domain.RuntimeEvent, error) {
 	if s.err != nil {
 		return nil, s.err
 	}
 	return s.events, nil
+}
+
+type fakeStreamingLogStream struct {
+	snapshot []string
+	updates  []domain.LogStreamUpdate
+	calls    int
+}
+
+func (s *fakeStreamingLogStream) Snapshot() []string {
+	return append([]string(nil), s.snapshot...)
+}
+
+func (s *fakeStreamingLogStream) Poll(context.Context) (domain.LogStreamUpdate, error) {
+	if s.calls >= len(s.updates) {
+		return domain.LogStreamUpdate{}, nil
+	}
+
+	update := s.updates[s.calls]
+	s.calls++
+	return update, nil
+}
+
+func (s *fakeStreamingLogStream) Close() error {
+	return nil
 }
 
 func testLogger() *slog.Logger {

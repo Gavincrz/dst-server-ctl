@@ -37,11 +37,30 @@ func TestRuntimeLogServiceGetRejectsUnsupportedShard(t *testing.T) {
 	}
 }
 
+func TestRuntimeLogServiceStreamUsesManagedShardPath(t *testing.T) {
+	reader := &fakeRuntimeLogReader{stream: fakeLogStream{}}
+	service := NewRuntimeLogService(domain.ManagedLayout{Logs: "/srv/managed/logs"}, reader)
+
+	stream, err := service.Stream(domain.ShardCaves, 20)
+	if err != nil {
+		t.Fatalf("Stream() error = %v", err)
+	}
+	defer stream.Close()
+
+	if reader.path != "/srv/managed/logs/caves.log" {
+		t.Fatalf("path = %q, want /srv/managed/logs/caves.log", reader.path)
+	}
+	if reader.maxLines != 20 {
+		t.Fatalf("maxLines = %d, want 20", reader.maxLines)
+	}
+}
+
 type fakeRuntimeLogReader struct {
 	path     string
 	maxLines int
 	lines    []string
 	err      error
+	stream   domain.LogStream
 }
 
 func (r *fakeRuntimeLogReader) ReadRecent(_ context.Context, path string, maxLines int) ([]string, error) {
@@ -51,4 +70,30 @@ func (r *fakeRuntimeLogReader) ReadRecent(_ context.Context, path string, maxLin
 		return nil, r.err
 	}
 	return r.lines, nil
+}
+
+func (r *fakeRuntimeLogReader) OpenStream(path string, maxLines int) (domain.LogStream, error) {
+	r.path = path
+	r.maxLines = maxLines
+	if r.err != nil {
+		return nil, r.err
+	}
+	if r.stream == nil {
+		return fakeLogStream{}, nil
+	}
+	return r.stream, nil
+}
+
+type fakeLogStream struct{}
+
+func (fakeLogStream) Snapshot() []string {
+	return nil
+}
+
+func (fakeLogStream) Poll(context.Context) (domain.LogStreamUpdate, error) {
+	return domain.LogStreamUpdate{}, nil
+}
+
+func (fakeLogStream) Close() error {
+	return nil
 }

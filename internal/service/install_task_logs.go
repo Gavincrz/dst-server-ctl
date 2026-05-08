@@ -24,12 +24,15 @@ func (s *InstallTaskLogService) Get(ctx context.Context, taskID domain.TaskID, m
 	if taskID == "" {
 		return nil, fmt.Errorf("%w: task id is required", domain.ErrTaskNotFound)
 	}
-	if maxLines <= 0 {
-		maxLines = 200
-	}
-	if maxLines > 500 {
-		maxLines = 500
-	}
+	maxLines = normalizeLogLineLimit(maxLines)
 
 	return s.reader.ReadRecent(ctx, filepath.Join(s.layout.Logs, "install-"+string(taskID)+".log"), maxLines)
+}
+
+func (s *InstallTaskLogService) Stream(taskID domain.TaskID, maxLines int) (domain.LogStream, error) {
+	if taskID == "" {
+		return nil, fmt.Errorf("%w: task id is required", domain.ErrTaskNotFound)
+	}
+
+	return s.reader.OpenStream(filepath.Join(s.layout.Logs, "install-"+string(taskID)+".log"), normalizeLogLineLimit(maxLines))
 }

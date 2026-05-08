@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"errors"
+	"io"
 	"os"
 )
 
@@ -19,6 +20,11 @@ func (Reader) ReadRecent(_ context.Context, path string, maxLines int) ([]string
 	}
 	defer file.Close()
 
+	lines, _, err := readRecentFromFile(file, maxLines)
+	return lines, err
+}
+
+func readRecentFromFile(file *os.File, maxLines int) ([]string, int64, error) {
 	lines := make([]string, 0, maxLines)
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
@@ -28,8 +34,13 @@ func (Reader) ReadRecent(_ context.Context, path string, maxLines int) ([]string
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
-	return lines, nil
+	offset, err := file.Seek(0, io.SeekCurrent)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return lines, offset, nil
 }

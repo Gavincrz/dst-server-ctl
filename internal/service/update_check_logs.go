@@ -20,12 +20,9 @@ func NewUpdateCheckLogService(layout domain.ManagedLayout, reader RuntimeLogRead
 }
 
 func (s *UpdateCheckLogService) Get(ctx context.Context, maxLines int) ([]string, error) {
-	if maxLines <= 0 {
-		maxLines = 200
-	}
-	if maxLines > 500 {
-		maxLines = 500
-	}
+	return s.reader.ReadRecent(ctx, filepath.Join(s.layout.Logs, "update-check.log"), normalizeLogLineLimit(maxLines))
+}
 
-	return s.reader.ReadRecent(ctx, filepath.Join(s.layout.Logs, "update-check.log"), maxLines)
+func (s *UpdateCheckLogService) Stream(maxLines int) (domain.LogStream, error) {
+	return s.reader.OpenStream(filepath.Join(s.layout.Logs, "update-check.log"), normalizeLogLineLimit(maxLines))
 }

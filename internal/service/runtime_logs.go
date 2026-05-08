@@ -10,6 +10,7 @@ import (
 
 type RuntimeLogReader interface {
 	ReadRecent(ctx context.Context, path string, maxLines int) ([]string, error)
+	OpenStream(path string, maxLines int) (domain.LogStream, error)
 }
 
 type RuntimeLogService struct {
@@ -28,12 +29,25 @@ func (s *RuntimeLogService) Get(ctx context.Context, shard domain.ShardName, max
 	if shard != domain.ShardMaster && shard != domain.ShardCaves {
 		return nil, fmt.Errorf("%w: unsupported shard %q", domain.ErrInvalidShard, shard)
 	}
-	if maxLines <= 0 {
-		maxLines = 200
-	}
-	if maxLines > 500 {
-		maxLines = 500
-	}
+	maxLines = normalizeLogLineLimit(maxLines)
 
 	return s.reader.ReadRecent(ctx, paths.ManagedShardLogPath(s.layout, shard), maxLines)
+}
+
+func (s *RuntimeLogService) Stream(shard domain.ShardName, maxLines int) (domain.LogStream, error) {
+	if shard != domain.ShardMaster && shard != domain.ShardCaves {
+		return nil, fmt.Errorf("%w: unsupported shard %q", domain.ErrInvalidShard, shard)
+	}
+
+	return s.reader.OpenStream(paths.ManagedShardLogPath(s.layout, shard), normalizeLogLineLimit(maxLines))
+}
+
+func normalizeLogLineLimit(maxLines int) int {
+	if maxLines <= 0 {
+		return 200
+	}
+	if maxLines > 500 {
+		return 500
+	}
+	return maxLines
 }
