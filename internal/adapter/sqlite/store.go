@@ -180,16 +180,25 @@ ON CONFLICT(id) DO UPDATE SET
 func (s *Store) GetClusterConfig(ctx context.Context) (domain.ClusterConfig, error) {
 	var row clusterConfigRow
 	err := s.db.QueryRowContext(ctx, `
-SELECT cluster_name, cluster_description, game_mode, max_players, language, pvp, pause_when_empty, created_at, updated_at
+SELECT cluster_name, cluster_description, cluster_password, cluster_intention, game_mode, max_players, language, pvp, pause_when_empty, offline_cluster, lan_only_cluster, tick_rate, console_enabled, bind_ip, master_port, cluster_key, created_at, updated_at
 FROM cluster_config
 WHERE id = 1`).Scan(
 		&row.ClusterName,
 		&row.ClusterDescription,
+		&row.ClusterPassword,
+		&row.ClusterIntention,
 		&row.GameMode,
 		&row.MaxPlayers,
 		&row.Language,
 		&row.PVP,
 		&row.PauseWhenEmpty,
+		&row.OfflineCluster,
+		&row.LANOnlyCluster,
+		&row.TickRate,
+		&row.ConsoleEnabled,
+		&row.BindIP,
+		&row.MasterPort,
+		&row.ClusterKey,
 		&row.CreatedAt,
 		&row.UpdatedAt,
 	)
@@ -228,30 +237,57 @@ INSERT INTO cluster_config (
 	id,
 	cluster_name,
 	cluster_description,
+	cluster_password,
+	cluster_intention,
 	game_mode,
 	max_players,
 	language,
 	pvp,
 	pause_when_empty,
+	offline_cluster,
+	lan_only_cluster,
+	tick_rate,
+	console_enabled,
+	bind_ip,
+	master_port,
+	cluster_key,
 	created_at,
 	updated_at
-) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(id) DO UPDATE SET
 	cluster_name = excluded.cluster_name,
 	cluster_description = excluded.cluster_description,
+	cluster_password = excluded.cluster_password,
+	cluster_intention = excluded.cluster_intention,
 	game_mode = excluded.game_mode,
 	max_players = excluded.max_players,
 	language = excluded.language,
 	pvp = excluded.pvp,
 	pause_when_empty = excluded.pause_when_empty,
+	offline_cluster = excluded.offline_cluster,
+	lan_only_cluster = excluded.lan_only_cluster,
+	tick_rate = excluded.tick_rate,
+	console_enabled = excluded.console_enabled,
+	bind_ip = excluded.bind_ip,
+	master_port = excluded.master_port,
+	cluster_key = excluded.cluster_key,
 	updated_at = excluded.updated_at`,
 		row.ClusterName,
 		row.ClusterDescription,
+		row.ClusterPassword,
+		row.ClusterIntention,
 		row.GameMode,
 		row.MaxPlayers,
 		row.Language,
 		row.PVP,
 		row.PauseWhenEmpty,
+		row.OfflineCluster,
+		row.LANOnlyCluster,
+		row.TickRate,
+		row.ConsoleEnabled,
+		row.BindIP,
+		row.MasterPort,
+		row.ClusterKey,
 		row.CreatedAt,
 		row.UpdatedAt,
 	)
@@ -264,10 +300,13 @@ ON CONFLICT(id) DO UPDATE SET
 	}
 	for _, shard := range row.Shards {
 		if _, err := tx.ExecContext(ctx, `
-INSERT INTO cluster_shards (name, enabled)
-VALUES (?, ?)`,
+INSERT INTO cluster_shards (name, enabled, server_port, master_server_port, authentication_port)
+VALUES (?, ?, ?, ?, ?)`,
 			shard.Name,
 			shard.Enabled,
+			shard.ServerPort,
+			shard.MasterServerPort,
+			shard.AuthenticationPort,
 		); err != nil {
 			return fmt.Errorf("save cluster shard %s: %w", shard.Name, err)
 		}
@@ -552,38 +591,62 @@ func (r updateStateRow) toDomain() (domain.UpdateState, error) {
 type clusterConfigRow struct {
 	ClusterName        string
 	ClusterDescription string
+	ClusterPassword    string
+	ClusterIntention   string
 	GameMode           string
 	MaxPlayers         int
 	Language           string
 	PVP                bool
 	PauseWhenEmpty     bool
+	OfflineCluster     bool
+	LANOnlyCluster     bool
+	TickRate           int
+	ConsoleEnabled     bool
+	BindIP             string
+	MasterPort         int
+	ClusterKey         string
 	Shards             []clusterShardRow
 	CreatedAt          string
 	UpdatedAt          string
 }
 
 type clusterShardRow struct {
-	Name    string
-	Enabled bool
+	Name               string
+	Enabled            bool
+	ServerPort         int
+	MasterServerPort   int
+	AuthenticationPort int
 }
 
 func clusterConfigRowFromDomain(config domain.ClusterConfig) clusterConfigRow {
 	shards := make([]clusterShardRow, 0, len(config.Shards))
 	for _, shard := range config.Shards {
 		shards = append(shards, clusterShardRow{
-			Name:    string(shard.Name),
-			Enabled: shard.Enabled,
+			Name:               string(shard.Name),
+			Enabled:            shard.Enabled,
+			ServerPort:         shard.ServerPort,
+			MasterServerPort:   shard.MasterServerPort,
+			AuthenticationPort: shard.AuthenticationPort,
 		})
 	}
 
 	return clusterConfigRow{
 		ClusterName:        config.ClusterName,
 		ClusterDescription: config.ClusterDescription,
+		ClusterPassword:    config.ClusterPassword,
+		ClusterIntention:   config.ClusterIntention,
 		GameMode:           config.GameMode,
 		MaxPlayers:         config.MaxPlayers,
 		Language:           config.Language,
 		PVP:                config.PVP,
 		PauseWhenEmpty:     config.PauseWhenEmpty,
+		OfflineCluster:     config.OfflineCluster,
+		LANOnlyCluster:     config.LANOnlyCluster,
+		TickRate:           config.TickRate,
+		ConsoleEnabled:     config.ConsoleEnabled,
+		BindIP:             config.BindIP,
+		MasterPort:         config.MasterPort,
+		ClusterKey:         config.ClusterKey,
 		Shards:             shards,
 		CreatedAt:          config.CreatedAt.UTC().Format(timeFormat),
 		UpdatedAt:          config.UpdatedAt.UTC().Format(timeFormat),
@@ -603,19 +666,31 @@ func (r clusterConfigRow) toDomain() (domain.ClusterConfig, error) {
 	shards := make([]domain.ShardConfig, 0, len(r.Shards))
 	for _, shard := range r.Shards {
 		shards = append(shards, domain.ShardConfig{
-			Name:    domain.ShardName(shard.Name),
-			Enabled: shard.Enabled,
+			Name:               domain.ShardName(shard.Name),
+			Enabled:            shard.Enabled,
+			ServerPort:         shard.ServerPort,
+			MasterServerPort:   shard.MasterServerPort,
+			AuthenticationPort: shard.AuthenticationPort,
 		})
 	}
 
 	return domain.ClusterConfig{
 		ClusterName:        r.ClusterName,
 		ClusterDescription: r.ClusterDescription,
+		ClusterPassword:    r.ClusterPassword,
+		ClusterIntention:   r.ClusterIntention,
 		GameMode:           r.GameMode,
 		MaxPlayers:         r.MaxPlayers,
 		Language:           r.Language,
 		PVP:                r.PVP,
 		PauseWhenEmpty:     r.PauseWhenEmpty,
+		OfflineCluster:     r.OfflineCluster,
+		LANOnlyCluster:     r.LANOnlyCluster,
+		TickRate:           r.TickRate,
+		ConsoleEnabled:     r.ConsoleEnabled,
+		BindIP:             r.BindIP,
+		MasterPort:         r.MasterPort,
+		ClusterKey:         r.ClusterKey,
 		Shards:             shards,
 		CreatedAt:          createdAt,
 		UpdatedAt:          updatedAt,
@@ -623,7 +698,7 @@ func (r clusterConfigRow) toDomain() (domain.ClusterConfig, error) {
 }
 
 func (s *Store) listClusterShards(ctx context.Context) ([]clusterShardRow, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT name, enabled FROM cluster_shards ORDER BY CASE name WHEN 'Master' THEN 0 WHEN 'Caves' THEN 1 ELSE 2 END, name`)
+	rows, err := s.db.QueryContext(ctx, `SELECT name, enabled, server_port, master_server_port, authentication_port FROM cluster_shards ORDER BY CASE name WHEN 'Master' THEN 0 WHEN 'Caves' THEN 1 ELSE 2 END, name`)
 	if err != nil {
 		return nil, fmt.Errorf("list cluster shards: %w", err)
 	}
@@ -632,7 +707,7 @@ func (s *Store) listClusterShards(ctx context.Context) ([]clusterShardRow, error
 	var shards []clusterShardRow
 	for rows.Next() {
 		var shard clusterShardRow
-		if err := rows.Scan(&shard.Name, &shard.Enabled); err != nil {
+		if err := rows.Scan(&shard.Name, &shard.Enabled, &shard.ServerPort, &shard.MasterServerPort, &shard.AuthenticationPort); err != nil {
 			return nil, fmt.Errorf("scan cluster shard: %w", err)
 		}
 		shards = append(shards, shard)

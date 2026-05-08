@@ -32,14 +32,25 @@ managed root 使用稳定子目录：
 控制器拥有受管服务器的生成文件：
 
 - `cluster.ini`
+- `adminlist.txt`
+- `whitelist.txt`
+- `blocklist.txt`
 - `Master/server.ini`
 - `Caves/server.ini`
+- `Master/worldgenoverride.lua`
+- `Caves/worldgenoverride.lua`
 - `Master/modoverrides.lua`
 - `Caves/modoverrides.lua`
 - `cluster_token.txt`
-- allow/block/admin 列表文件
 
 DST 文件 writer 放在 adapter 层。handler 和 UI 不能手写这些格式。
+
+配置边界按四层拆分：
+
+- cluster 共享配置：`cluster.ini`、token、admin/allow/block 列表
+- shard 专属配置：各 shard `server.ini`
+- 世界配置：各 shard `worldgenoverride.lua`，必要时兼容 `leveldataoverride.lua`
+- 模组配置：`dedicated_server_mods_setup.lua` 与各 shard `modoverrides.lua`
 
 ## 进程策略
 

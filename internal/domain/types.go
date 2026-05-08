@@ -115,19 +115,31 @@ type UpdateState struct {
 type ClusterConfig struct {
 	ClusterName        string
 	ClusterDescription string
+	ClusterPassword    string
+	ClusterIntention   string
 	GameMode           string
 	MaxPlayers         int
 	Language           string
 	PVP                bool
 	PauseWhenEmpty     bool
+	OfflineCluster     bool
+	LANOnlyCluster     bool
+	TickRate           int
+	ConsoleEnabled     bool
+	BindIP             string
+	MasterPort         int
+	ClusterKey         string
 	Shards             []ShardConfig
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
 }
 
 type ShardConfig struct {
-	Name    ShardName
-	Enabled bool
+	Name               ShardName
+	Enabled            bool
+	ServerPort         int
+	MasterServerPort   int
+	AuthenticationPort int
 }
 
 type TaskID string

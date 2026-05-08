@@ -12,9 +12,7 @@ import (
 )
 
 const (
-	loopbackAddress   = "127.0.0.1"
-	defaultMasterPort = 10888
-	defaultClusterKey = "dst-server-ctl"
+	loopbackAddress = "127.0.0.1"
 )
 
 type Writer struct {
@@ -71,14 +69,22 @@ func renderClusterINI(config domain.ClusterConfig) string {
 	builder.WriteString("[NETWORK]\n")
 	builder.WriteString(fmt.Sprintf("cluster_name = %s\n", config.ClusterName))
 	builder.WriteString(fmt.Sprintf("cluster_description = %s\n", config.ClusterDescription))
-	builder.WriteString(fmt.Sprintf("cluster_language = %s\n\n", config.Language))
+	builder.WriteString(fmt.Sprintf("cluster_password = %s\n", config.ClusterPassword))
+	builder.WriteString(fmt.Sprintf("cluster_intention = %s\n", config.ClusterIntention))
+	builder.WriteString(fmt.Sprintf("cluster_language = %s\n", config.Language))
+	builder.WriteString(fmt.Sprintf("offline_cluster = %s\n", formatBool(config.OfflineCluster)))
+	builder.WriteString(fmt.Sprintf("lan_only_cluster = %s\n", formatBool(config.LANOnlyCluster)))
+	builder.WriteString(fmt.Sprintf("tick_rate = %d\n\n", config.TickRate))
+
+	builder.WriteString("[MISC]\n")
+	builder.WriteString(fmt.Sprintf("console_enabled = %s\n\n", formatBool(config.ConsoleEnabled)))
 
 	builder.WriteString("[SHARD]\n")
 	builder.WriteString(fmt.Sprintf("shard_enabled = %s\n", formatBool(enabledShards > 1)))
 	if enabledShards > 1 {
-		builder.WriteString(fmt.Sprintf("bind_ip = %s\n", loopbackAddress))
-		builder.WriteString(fmt.Sprintf("master_port = %d\n", defaultMasterPort))
-		builder.WriteString(fmt.Sprintf("cluster_key = %s\n", defaultClusterKey))
+		builder.WriteString(fmt.Sprintf("bind_ip = %s\n", config.BindIP))
+		builder.WriteString(fmt.Sprintf("master_port = %d\n", config.MasterPort))
+		builder.WriteString(fmt.Sprintf("cluster_key = %s\n", config.ClusterKey))
 	}
 
 	return builder.String()
@@ -86,17 +92,28 @@ func renderClusterINI(config domain.ClusterConfig) string {
 
 func renderServerINI(config domain.ClusterConfig, shardName domain.ShardName) string {
 	var builder strings.Builder
+	shard, ok := findShard(config.Shards, shardName)
+	if !ok {
+		return ""
+	}
+
+	builder.WriteString("[NETWORK]\n")
+	builder.WriteString(fmt.Sprintf("server_port = %d\n", shard.ServerPort))
+	if countEnabledShards(config.Shards) > 1 && shardName != domain.ShardMaster {
+		builder.WriteString(fmt.Sprintf("master_ip = %s\n", loopbackAddress))
+		builder.WriteString(fmt.Sprintf("master_port = %d\n", config.MasterPort))
+	}
+	builder.WriteString("\n[STEAM]\n")
+	builder.WriteString(fmt.Sprintf("master_server_port = %d\n", shard.MasterServerPort))
+	builder.WriteString(fmt.Sprintf("authentication_port = %d\n", shard.AuthenticationPort))
 
 	if countEnabledShards(config.Shards) > 1 {
-		builder.WriteString("[SHARD]\n")
+		builder.WriteString("\n[SHARD]\n")
 		if shardName == domain.ShardMaster {
 			builder.WriteString("is_master = true\n")
 		} else {
 			builder.WriteString("is_master = false\n")
 			builder.WriteString(fmt.Sprintf("name = %s\n", shardName))
-			builder.WriteString("\n[NETWORK]\n")
-			builder.WriteString(fmt.Sprintf("master_ip = %s\n", loopbackAddress))
-			builder.WriteString(fmt.Sprintf("master_port = %d\n", defaultMasterPort))
 		}
 	}
 
@@ -128,4 +145,14 @@ func shardEnabled(shards []domain.ShardConfig, name domain.ShardName) bool {
 	}
 
 	return false
+}
+
+func findShard(shards []domain.ShardConfig, name domain.ShardName) (domain.ShardConfig, bool) {
+	for _, shard := range shards {
+		if shard.Name == name {
+			return shard, true
+		}
+	}
+
+	return domain.ShardConfig{}, false
 }

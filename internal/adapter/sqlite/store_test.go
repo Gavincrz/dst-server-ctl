@@ -220,14 +220,23 @@ func TestClusterConfigRepositoryRoundTripsConfig(t *testing.T) {
 	config := domain.ClusterConfig{
 		ClusterName:        "Managed DST",
 		ClusterDescription: "Test cluster",
+		ClusterPassword:    "secret",
+		ClusterIntention:   "cooperative",
 		GameMode:           "survival",
 		MaxPlayers:         8,
 		Language:           "en",
 		PVP:                true,
 		PauseWhenEmpty:     false,
+		OfflineCluster:     true,
+		LANOnlyCluster:     false,
+		TickRate:           30,
+		ConsoleEnabled:     true,
+		BindIP:             "0.0.0.0",
+		MasterPort:         12000,
+		ClusterKey:         "cluster-abc",
 		Shards: []domain.ShardConfig{
-			{Name: domain.ShardMaster, Enabled: true},
-			{Name: domain.ShardCaves, Enabled: false},
+			{Name: domain.ShardMaster, Enabled: true, ServerPort: 11000, MasterServerPort: 27020, AuthenticationPort: 8768},
+			{Name: domain.ShardCaves, Enabled: false, ServerPort: 11001, MasterServerPort: 27021, AuthenticationPort: 8769},
 		},
 		CreatedAt: time.Date(2026, 4, 24, 9, 0, 0, 0, time.UTC),
 		UpdatedAt: time.Date(2026, 4, 24, 10, 0, 0, 0, time.UTC),
@@ -248,11 +257,20 @@ func TestClusterConfigRepositoryRoundTripsConfig(t *testing.T) {
 	if got.GameMode != config.GameMode {
 		t.Fatalf("GameMode = %q, want %q", got.GameMode, config.GameMode)
 	}
+	if got.ClusterPassword != config.ClusterPassword {
+		t.Fatalf("ClusterPassword = %q, want %q", got.ClusterPassword, config.ClusterPassword)
+	}
+	if got.MasterPort != config.MasterPort {
+		t.Fatalf("MasterPort = %d, want %d", got.MasterPort, config.MasterPort)
+	}
 	if len(got.Shards) != 2 {
 		t.Fatalf("shard count = %d, want 2", len(got.Shards))
 	}
 	if got.Shards[1].Name != domain.ShardCaves || got.Shards[1].Enabled {
 		t.Fatalf("Caves shard = %#v, want disabled caves shard", got.Shards[1])
+	}
+	if got.Shards[0].ServerPort != 11000 || got.Shards[1].AuthenticationPort != 8769 {
+		t.Fatalf("shards = %#v, want persisted shard port fields", got.Shards)
 	}
 }
 

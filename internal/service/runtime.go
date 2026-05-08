@@ -268,11 +268,20 @@ func clusterConfigsEqual(a, b *domain.ClusterConfig) bool {
 	}
 	if a.ClusterName != b.ClusterName ||
 		a.ClusterDescription != b.ClusterDescription ||
+		a.ClusterPassword != b.ClusterPassword ||
+		a.ClusterIntention != b.ClusterIntention ||
 		a.GameMode != b.GameMode ||
 		a.MaxPlayers != b.MaxPlayers ||
 		a.Language != b.Language ||
 		a.PVP != b.PVP ||
 		a.PauseWhenEmpty != b.PauseWhenEmpty ||
+		a.OfflineCluster != b.OfflineCluster ||
+		a.LANOnlyCluster != b.LANOnlyCluster ||
+		a.TickRate != b.TickRate ||
+		a.ConsoleEnabled != b.ConsoleEnabled ||
+		a.BindIP != b.BindIP ||
+		a.MasterPort != b.MasterPort ||
+		a.ClusterKey != b.ClusterKey ||
 		len(a.Shards) != len(b.Shards) {
 		return false
 	}

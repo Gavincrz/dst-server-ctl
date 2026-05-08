@@ -1878,6 +1878,21 @@
           </label>
 
           <label class="field">
+            <span>Cluster Password</span>
+            <input bind:value={clusterForm.clusterPassword} disabled={clusterSubmitting} maxlength="128" type="password" />
+          </label>
+
+          <label class="field">
+            <span>Cluster Intention</span>
+            <select bind:value={clusterForm.clusterIntention} disabled={clusterSubmitting}>
+              <option value="cooperative">Cooperative</option>
+              <option value="social">Social</option>
+              <option value="competitive">Competitive</option>
+              <option value="madness">Madness</option>
+            </select>
+          </label>
+
+          <label class="field">
             <span>Game Mode</span>
             <select bind:value={clusterForm.gameMode} disabled={clusterSubmitting}>
               <option value="survival">Survival</option>
@@ -1909,8 +1924,28 @@
             <input bind:value={clusterForm.maxPlayers} disabled={clusterSubmitting} inputmode="numeric" />
           </label>
 
+          <label class="field">
+            <span>Tick Rate</span>
+            <input bind:value={clusterForm.tickRate} disabled={clusterSubmitting} inputmode="numeric" />
+          </label>
+
+          <label class="field">
+            <span>Bind IP</span>
+            <input bind:value={clusterForm.bindIP} disabled={clusterSubmitting} />
+          </label>
+
+          <label class="field">
+            <span>Shard Master Port</span>
+            <input bind:value={clusterForm.masterPort} disabled={clusterSubmitting} inputmode="numeric" />
+          </label>
+
+          <label class="field field-wide">
+            <span>Cluster Key</span>
+            <input bind:value={clusterForm.clusterKey} disabled={clusterSubmitting} maxlength="128" />
+          </label>
+
           <div class="field field-wide">
-            <span>World Rules</span>
+            <span>Cluster Rules</span>
             <div class="toggle-grid">
               <label class="toggle-card">
                 <input bind:checked={clusterForm.pauseWhenEmpty} disabled={clusterSubmitting} type="checkbox" />
@@ -1924,6 +1959,27 @@
                 <div>
                   <strong>Enable PVP</strong>
                   <small>Allow players to damage each other on the managed cluster.</small>
+                </div>
+              </label>
+              <label class="toggle-card">
+                <input bind:checked={clusterForm.offlineCluster} disabled={clusterSubmitting} type="checkbox" />
+                <div>
+                  <strong>Offline Cluster</strong>
+                  <small>Disable online service requirements and keep the cluster off the public list.</small>
+                </div>
+              </label>
+              <label class="toggle-card">
+                <input bind:checked={clusterForm.lanOnlyCluster} disabled={clusterSubmitting} type="checkbox" />
+                <div>
+                  <strong>LAN Only</strong>
+                  <small>Restrict discovery to local network clients.</small>
+                </div>
+              </label>
+              <label class="toggle-card">
+                <input bind:checked={clusterForm.consoleEnabled} disabled={clusterSubmitting} type="checkbox" />
+                <div>
+                  <strong>Console Enabled</strong>
+                  <small>Allow the DST dedicated server console input mechanism.</small>
                 </div>
               </label>
             </div>
@@ -1957,6 +2013,18 @@
                 <span class={`badge badge-${clusterShardEnabled('Master') ? 'succeeded' : 'failed'}`}>
                   {clusterShardEnabled('Master') ? 'Enabled' : 'Disabled'}
                 </span>
+                <div class="field field-wide">
+                  <span>Game Port</span>
+                  <input bind:value={clusterForm.masterServerPort} disabled={clusterSubmitting} inputmode="numeric" />
+                </div>
+                <div class="field field-wide">
+                  <span>Steam Master Port</span>
+                  <input bind:value={clusterForm.masterMasterServerPort} disabled={clusterSubmitting} inputmode="numeric" />
+                </div>
+                <div class="field field-wide">
+                  <span>Steam Auth Port</span>
+                  <input bind:value={clusterForm.masterAuthenticationPort} disabled={clusterSubmitting} inputmode="numeric" />
+                </div>
               </label>
 
               <label class="shard-card">
@@ -1968,6 +2036,18 @@
                 <span class={`badge badge-${clusterShardEnabled('Caves') ? 'succeeded' : 'idle'}`}>
                   {clusterShardEnabled('Caves') ? 'Enabled' : 'Disabled'}
                 </span>
+                <div class="field field-wide">
+                  <span>Game Port</span>
+                  <input bind:value={clusterForm.cavesServerPort} disabled={clusterSubmitting} inputmode="numeric" />
+                </div>
+                <div class="field field-wide">
+                  <span>Steam Master Port</span>
+                  <input bind:value={clusterForm.cavesMasterServerPort} disabled={clusterSubmitting} inputmode="numeric" />
+                </div>
+                <div class="field field-wide">
+                  <span>Steam Auth Port</span>
+                  <input bind:value={clusterForm.cavesAuthenticationPort} disabled={clusterSubmitting} inputmode="numeric" />
+                </div>
               </label>
             </div>
           </div>

@@ -847,19 +847,31 @@ type updateResponse struct {
 type clusterResponse struct {
 	ClusterName        string          `json:"clusterName"`
 	ClusterDescription string          `json:"clusterDescription"`
+	ClusterPassword    string          `json:"clusterPassword"`
+	ClusterIntention   string          `json:"clusterIntention"`
 	GameMode           string          `json:"gameMode"`
 	MaxPlayers         int             `json:"maxPlayers"`
 	Language           string          `json:"language"`
 	PVP                bool            `json:"pvp"`
 	PauseWhenEmpty     bool            `json:"pauseWhenEmpty"`
+	OfflineCluster     bool            `json:"offlineCluster"`
+	LANOnlyCluster     bool            `json:"lanOnlyCluster"`
+	TickRate           int             `json:"tickRate"`
+	ConsoleEnabled     bool            `json:"consoleEnabled"`
+	BindIP             string          `json:"bindIP"`
+	MasterPort         int             `json:"masterPort"`
+	ClusterKey         string          `json:"clusterKey"`
 	Shards             []shardResponse `json:"shards"`
 	CreatedAt          time.Time       `json:"createdAt"`
 	UpdatedAt          time.Time       `json:"updatedAt"`
 }
 
 type shardResponse struct {
-	Name    string `json:"name"`
-	Enabled bool   `json:"enabled"`
+	Name               string `json:"name"`
+	Enabled            bool   `json:"enabled"`
+	ServerPort         int    `json:"serverPort"`
+	MasterServerPort   int    `json:"masterServerPort"`
+	AuthenticationPort int    `json:"authenticationPort"`
 }
 
 type runtimeResponse struct {
@@ -907,11 +919,20 @@ type dashboardResponse struct {
 type updateClusterRequest struct {
 	ClusterName        string        `json:"clusterName"`
 	ClusterDescription string        `json:"clusterDescription"`
+	ClusterPassword    string        `json:"clusterPassword"`
+	ClusterIntention   string        `json:"clusterIntention"`
 	GameMode           string        `json:"gameMode"`
 	MaxPlayers         int           `json:"maxPlayers"`
 	Language           string        `json:"language"`
 	PVP                bool          `json:"pvp"`
 	PauseWhenEmpty     bool          `json:"pauseWhenEmpty"`
+	OfflineCluster     bool          `json:"offlineCluster"`
+	LANOnlyCluster     bool          `json:"lanOnlyCluster"`
+	TickRate           int           `json:"tickRate"`
+	ConsoleEnabled     bool          `json:"consoleEnabled"`
+	BindIP             string        `json:"bindIP"`
+	MasterPort         int           `json:"masterPort"`
+	ClusterKey         string        `json:"clusterKey"`
 	Shards             []shardConfig `json:"shards"`
 }
 
@@ -920,8 +941,11 @@ type updateStartRequest struct {
 }
 
 type shardConfig struct {
-	Name    string `json:"name"`
-	Enabled bool   `json:"enabled"`
+	Name               string `json:"name"`
+	Enabled            bool   `json:"enabled"`
+	ServerPort         int    `json:"serverPort"`
+	MasterServerPort   int    `json:"masterServerPort"`
+	AuthenticationPort int    `json:"authenticationPort"`
 }
 
 func installationResponseFromDomain(state domain.InstallationState) installationResponse {
@@ -973,19 +997,31 @@ func clusterResponseFromDomain(config domain.ClusterConfig) clusterResponse {
 	shards := make([]shardResponse, 0, len(config.Shards))
 	for _, shard := range config.Shards {
 		shards = append(shards, shardResponse{
-			Name:    string(shard.Name),
-			Enabled: shard.Enabled,
+			Name:               string(shard.Name),
+			Enabled:            shard.Enabled,
+			ServerPort:         shard.ServerPort,
+			MasterServerPort:   shard.MasterServerPort,
+			AuthenticationPort: shard.AuthenticationPort,
 		})
 	}
 
 	return clusterResponse{
 		ClusterName:        config.ClusterName,
 		ClusterDescription: config.ClusterDescription,
+		ClusterPassword:    config.ClusterPassword,
+		ClusterIntention:   config.ClusterIntention,
 		GameMode:           config.GameMode,
 		MaxPlayers:         config.MaxPlayers,
 		Language:           config.Language,
 		PVP:                config.PVP,
 		PauseWhenEmpty:     config.PauseWhenEmpty,
+		OfflineCluster:     config.OfflineCluster,
+		LANOnlyCluster:     config.LANOnlyCluster,
+		TickRate:           config.TickRate,
+		ConsoleEnabled:     config.ConsoleEnabled,
+		BindIP:             config.BindIP,
+		MasterPort:         config.MasterPort,
+		ClusterKey:         config.ClusterKey,
 		Shards:             shards,
 		CreatedAt:          config.CreatedAt,
 		UpdatedAt:          config.UpdatedAt,
@@ -1028,19 +1064,31 @@ func (r updateClusterRequest) toDomain() domain.ClusterConfig {
 	shards := make([]domain.ShardConfig, 0, len(r.Shards))
 	for _, shard := range r.Shards {
 		shards = append(shards, domain.ShardConfig{
-			Name:    domain.ShardName(shard.Name),
-			Enabled: shard.Enabled,
+			Name:               domain.ShardName(shard.Name),
+			Enabled:            shard.Enabled,
+			ServerPort:         shard.ServerPort,
+			MasterServerPort:   shard.MasterServerPort,
+			AuthenticationPort: shard.AuthenticationPort,
 		})
 	}
 
 	return domain.ClusterConfig{
 		ClusterName:        r.ClusterName,
 		ClusterDescription: r.ClusterDescription,
+		ClusterPassword:    r.ClusterPassword,
+		ClusterIntention:   r.ClusterIntention,
 		GameMode:           r.GameMode,
 		MaxPlayers:         r.MaxPlayers,
 		Language:           r.Language,
 		PVP:                r.PVP,
 		PauseWhenEmpty:     r.PauseWhenEmpty,
+		OfflineCluster:     r.OfflineCluster,
+		LANOnlyCluster:     r.LANOnlyCluster,
+		TickRate:           r.TickRate,
+		ConsoleEnabled:     r.ConsoleEnabled,
+		BindIP:             r.BindIP,
+		MasterPort:         r.MasterPort,
+		ClusterKey:         r.ClusterKey,
 		Shards:             shards,
 	}
 }

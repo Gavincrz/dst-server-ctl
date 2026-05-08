@@ -18,14 +18,23 @@ func TestWriterWritesClusterAndShardConfigFiles(t *testing.T) {
 	config := domain.ClusterConfig{
 		ClusterName:        "Managed DST",
 		ClusterDescription: "Test cluster",
+		ClusterPassword:    "secret",
+		ClusterIntention:   "cooperative",
 		GameMode:           "survival",
 		MaxPlayers:         8,
 		Language:           "en",
 		PVP:                true,
 		PauseWhenEmpty:     false,
+		OfflineCluster:     false,
+		LANOnlyCluster:     true,
+		TickRate:           30,
+		ConsoleEnabled:     true,
+		BindIP:             "0.0.0.0",
+		MasterPort:         12000,
+		ClusterKey:         "cluster-abc",
 		Shards: []domain.ShardConfig{
-			{Name: domain.ShardMaster, Enabled: true},
-			{Name: domain.ShardCaves, Enabled: true},
+			{Name: domain.ShardMaster, Enabled: true, ServerPort: 11000, MasterServerPort: 27020, AuthenticationPort: 8768},
+			{Name: domain.ShardCaves, Enabled: true, ServerPort: 11001, MasterServerPort: 27021, AuthenticationPort: 8769},
 		},
 		CreatedAt: time.Date(2026, 4, 24, 10, 0, 0, 0, time.UTC),
 		UpdatedAt: time.Date(2026, 4, 24, 10, 0, 0, 0, time.UTC),
@@ -42,21 +51,39 @@ func TestWriterWritesClusterAndShardConfigFiles(t *testing.T) {
 	if !strings.Contains(clusterINI, "cluster_language = en") {
 		t.Fatalf("cluster.ini = %q, want cluster_language", clusterINI)
 	}
+	if !strings.Contains(clusterINI, "cluster_intention = cooperative") {
+		t.Fatalf("cluster.ini = %q, want cluster_intention", clusterINI)
+	}
+	if !strings.Contains(clusterINI, "lan_only_cluster = true") {
+		t.Fatalf("cluster.ini = %q, want lan_only_cluster = true", clusterINI)
+	}
+	if !strings.Contains(clusterINI, "master_port = 12000") {
+		t.Fatalf("cluster.ini = %q, want master_port = 12000", clusterINI)
+	}
 	if !strings.Contains(clusterINI, "shard_enabled = true") {
 		t.Fatalf("cluster.ini = %q, want shard_enabled = true", clusterINI)
 	}
 
 	masterINI := readFile(t, filepath.Join(paths.ManagedShardDir(layout, domain.ShardMaster), "server.ini"))
+	if !strings.Contains(masterINI, "server_port = 11000") {
+		t.Fatalf("Master/server.ini = %q, want server_port = 11000", masterINI)
+	}
 	if !strings.Contains(masterINI, "is_master = true") {
 		t.Fatalf("Master/server.ini = %q, want is_master = true", masterINI)
 	}
 
 	cavesINI := readFile(t, filepath.Join(paths.ManagedShardDir(layout, domain.ShardCaves), "server.ini"))
+	if !strings.Contains(cavesINI, "server_port = 11001") {
+		t.Fatalf("Caves/server.ini = %q, want server_port = 11001", cavesINI)
+	}
 	if !strings.Contains(cavesINI, "name = Caves") {
 		t.Fatalf("Caves/server.ini = %q, want name = Caves", cavesINI)
 	}
 	if !strings.Contains(cavesINI, "master_ip = 127.0.0.1") {
 		t.Fatalf("Caves/server.ini = %q, want master_ip", cavesINI)
+	}
+	if !strings.Contains(cavesINI, "master_server_port = 27021") {
+		t.Fatalf("Caves/server.ini = %q, want master_server_port = 27021", cavesINI)
 	}
 }
 
@@ -64,14 +91,16 @@ func TestWriterRemovesDisabledShardServerINI(t *testing.T) {
 	layout := paths.ManagedLayout(t.TempDir())
 	writer := NewWriter(layout)
 	config := domain.ClusterConfig{
-		ClusterName:    "Managed DST",
-		GameMode:       "survival",
-		MaxPlayers:     6,
-		Language:       "en",
-		PauseWhenEmpty: true,
+		ClusterName:      "Managed DST",
+		ClusterIntention: "cooperative",
+		GameMode:         "survival",
+		MaxPlayers:       6,
+		Language:         "en",
+		PauseWhenEmpty:   true,
+		TickRate:         15,
 		Shards: []domain.ShardConfig{
-			{Name: domain.ShardMaster, Enabled: true},
-			{Name: domain.ShardCaves, Enabled: true},
+			{Name: domain.ShardMaster, Enabled: true, ServerPort: 10999, MasterServerPort: 27016, AuthenticationPort: 8766},
+			{Name: domain.ShardCaves, Enabled: true, ServerPort: 11000, MasterServerPort: 27017, AuthenticationPort: 8767},
 		},
 		CreatedAt: time.Date(2026, 4, 24, 10, 0, 0, 0, time.UTC),
 		UpdatedAt: time.Date(2026, 4, 24, 10, 0, 0, 0, time.UTC),

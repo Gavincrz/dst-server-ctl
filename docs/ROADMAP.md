@@ -34,7 +34,7 @@
 - 配置服务器名、描述、密码、语言、人数、PvP、暂停行为、游戏模式。
 - 管理 token 输入，但不回显 token。
 - 管理 admin、block、allow 列表。
-- 添加世界模板和生成的 `leveldataoverride.lua`。
+- 添加世界模板和生成的 `worldgenoverride.lua`，必要时再补 `leveldataoverride.lua` 兼容输出。
 
 ## 阶段 5：模组管理
 

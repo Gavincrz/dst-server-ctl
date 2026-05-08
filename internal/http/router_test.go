@@ -701,14 +701,23 @@ func TestUpdateClusterConfigEndpoint(t *testing.T) {
 			updated: domain.ClusterConfig{
 				ClusterName:        "Managed DST",
 				ClusterDescription: "test",
+				ClusterPassword:    "secret",
+				ClusterIntention:   "cooperative",
 				GameMode:           "endless",
 				MaxPlayers:         10,
 				Language:           "en",
 				PVP:                true,
 				PauseWhenEmpty:     false,
+				OfflineCluster:     false,
+				LANOnlyCluster:     false,
+				TickRate:           15,
+				ConsoleEnabled:     true,
+				BindIP:             "127.0.0.1",
+				MasterPort:         10888,
+				ClusterKey:         "dst-server-ctl",
 				Shards: []domain.ShardConfig{
-					{Name: domain.ShardMaster, Enabled: true},
-					{Name: domain.ShardCaves, Enabled: true},
+					{Name: domain.ShardMaster, Enabled: true, ServerPort: 10999, MasterServerPort: 27016, AuthenticationPort: 8766},
+					{Name: domain.ShardCaves, Enabled: true, ServerPort: 11000, MasterServerPort: 27017, AuthenticationPort: 8767},
 				},
 				CreatedAt: updatedAt.Add(-time.Hour),
 				UpdatedAt: updatedAt,
@@ -717,7 +726,7 @@ func TestUpdateClusterConfigEndpoint(t *testing.T) {
 		InstallTasks: fakeInstallationTaskService{},
 	})
 
-	body := strings.NewReader(`{"clusterName":"Managed DST","clusterDescription":"test","gameMode":"endless","maxPlayers":10,"language":"en","pvp":true,"pauseWhenEmpty":false,"shards":[{"name":"Master","enabled":true},{"name":"Caves","enabled":true}]}`)
+	body := strings.NewReader(`{"clusterName":"Managed DST","clusterDescription":"test","clusterPassword":"secret","clusterIntention":"cooperative","gameMode":"endless","maxPlayers":10,"language":"en","pvp":true,"pauseWhenEmpty":false,"offlineCluster":false,"lanOnlyCluster":false,"tickRate":15,"consoleEnabled":true,"bindIP":"127.0.0.1","masterPort":10888,"clusterKey":"dst-server-ctl","shards":[{"name":"Master","enabled":true,"serverPort":10999,"masterServerPort":27016,"authenticationPort":8766},{"name":"Caves","enabled":true,"serverPort":11000,"masterServerPort":27017,"authenticationPort":8767}]}`)
 	request := httptest.NewRequest(nethttp.MethodPut, "/api/v1/cluster", body)
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, request)
@@ -735,7 +744,7 @@ func TestUpdateClusterConfigEndpointReturnsBadRequest(t *testing.T) {
 		InstallTasks: fakeInstallationTaskService{},
 	})
 
-	body := strings.NewReader(`{"clusterName":"","gameMode":"survival","maxPlayers":6,"language":"en","shards":[{"name":"Master","enabled":true}]}`)
+	body := strings.NewReader(`{"clusterName":"","clusterIntention":"cooperative","gameMode":"survival","maxPlayers":6,"language":"en","tickRate":15,"shards":[{"name":"Master","enabled":true,"serverPort":10999,"masterServerPort":27016,"authenticationPort":8766}]}`)
 	request := httptest.NewRequest(nethttp.MethodPut, "/api/v1/cluster", body)
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, request)
@@ -753,7 +762,7 @@ func TestUpdateClusterConfigEndpointReturnsInternalServerError(t *testing.T) {
 		InstallTasks: fakeInstallationTaskService{},
 	})
 
-	body := strings.NewReader(`{"clusterName":"Managed DST","gameMode":"survival","maxPlayers":6,"language":"en","shards":[{"name":"Master","enabled":true}]}`)
+	body := strings.NewReader(`{"clusterName":"Managed DST","clusterIntention":"cooperative","gameMode":"survival","maxPlayers":6,"language":"en","tickRate":15,"shards":[{"name":"Master","enabled":true,"serverPort":10999,"masterServerPort":27016,"authenticationPort":8766}]}`)
 	request := httptest.NewRequest(nethttp.MethodPut, "/api/v1/cluster", body)
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, request)

@@ -39,12 +39,14 @@ func TestClusterConfigServiceInitializeCreatesMissingConfig(t *testing.T) {
 func TestClusterConfigServiceInitializeReturnsExistingConfig(t *testing.T) {
 	ctx := context.Background()
 	existing := domain.ClusterConfig{
-		ClusterName: "Existing",
-		GameMode:    "endless",
-		MaxPlayers:  8,
-		Language:    "en",
+		ClusterName:      "Existing",
+		ClusterIntention: "cooperative",
+		GameMode:         "endless",
+		MaxPlayers:       8,
+		Language:         "en",
+		TickRate:         15,
 		Shards: []domain.ShardConfig{
-			{Name: domain.ShardMaster, Enabled: true},
+			{Name: domain.ShardMaster, Enabled: true, ServerPort: 10999, MasterServerPort: 27016, AuthenticationPort: 8766},
 		},
 		CreatedAt: time.Date(2026, 4, 24, 8, 0, 0, 0, time.UTC),
 		UpdatedAt: time.Date(2026, 4, 24, 8, 0, 0, 0, time.UTC),
@@ -70,13 +72,15 @@ func TestClusterConfigServiceUpdateNormalizesAndPersists(t *testing.T) {
 	createdAt := time.Date(2026, 4, 24, 8, 0, 0, 0, time.UTC)
 	repo := &fakeClusterConfigRepository{
 		config: domain.ClusterConfig{
-			ClusterName: "Old",
-			GameMode:    "survival",
-			MaxPlayers:  6,
-			Language:    "en",
+			ClusterName:      "Old",
+			ClusterIntention: "cooperative",
+			GameMode:         "survival",
+			MaxPlayers:       6,
+			Language:         "en",
+			TickRate:         15,
 			Shards: []domain.ShardConfig{
-				{Name: domain.ShardMaster, Enabled: true},
-				{Name: domain.ShardCaves, Enabled: true},
+				{Name: domain.ShardMaster, Enabled: true, ServerPort: 10999, MasterServerPort: 27016, AuthenticationPort: 8766},
+				{Name: domain.ShardCaves, Enabled: true, ServerPort: 11000, MasterServerPort: 27017, AuthenticationPort: 8767},
 			},
 			CreatedAt: createdAt,
 			UpdatedAt: createdAt,
@@ -90,14 +94,23 @@ func TestClusterConfigServiceUpdateNormalizesAndPersists(t *testing.T) {
 	config, err := service.Update(ctx, domain.ClusterConfig{
 		ClusterName:        "  New Cluster  ",
 		ClusterDescription: "  test  ",
+		ClusterPassword:    "  secret  ",
+		ClusterIntention:   " social ",
 		GameMode:           " endless ",
 		MaxPlayers:         12,
 		Language:           " en ",
 		PVP:                true,
 		PauseWhenEmpty:     false,
+		OfflineCluster:     true,
+		LANOnlyCluster:     false,
+		TickRate:           30,
+		ConsoleEnabled:     true,
+		BindIP:             " 0.0.0.0 ",
+		MasterPort:         12000,
+		ClusterKey:         " cluster-1 ",
 		Shards: []domain.ShardConfig{
-			{Name: domain.ShardCaves, Enabled: false},
-			{Name: domain.ShardMaster, Enabled: true},
+			{Name: domain.ShardCaves, Enabled: false, ServerPort: 11001, MasterServerPort: 27018, AuthenticationPort: 8768},
+			{Name: domain.ShardMaster, Enabled: true, ServerPort: 11000, MasterServerPort: 27017, AuthenticationPort: 8767},
 		},
 	})
 	if err != nil {
@@ -128,12 +141,14 @@ func TestClusterConfigServiceUpdateValidatesConfig(t *testing.T) {
 	ctx := context.Background()
 	repo := &fakeClusterConfigRepository{
 		config: domain.ClusterConfig{
-			ClusterName: "Existing",
-			GameMode:    "survival",
-			MaxPlayers:  6,
-			Language:    "en",
+			ClusterName:      "Existing",
+			ClusterIntention: "cooperative",
+			GameMode:         "survival",
+			MaxPlayers:       6,
+			Language:         "en",
+			TickRate:         15,
 			Shards: []domain.ShardConfig{
-				{Name: domain.ShardMaster, Enabled: true},
+				{Name: domain.ShardMaster, Enabled: true, ServerPort: 10999, MasterServerPort: 27016, AuthenticationPort: 8766},
 			},
 			CreatedAt: time.Date(2026, 4, 24, 8, 0, 0, 0, time.UTC),
 			UpdatedAt: time.Date(2026, 4, 24, 8, 0, 0, 0, time.UTC),
@@ -142,12 +157,14 @@ func TestClusterConfigServiceUpdateValidatesConfig(t *testing.T) {
 	service := NewClusterConfigService(repo, nil)
 
 	_, err := service.Update(ctx, domain.ClusterConfig{
-		ClusterName: "",
-		GameMode:    "survival",
-		MaxPlayers:  6,
-		Language:    "en",
+		ClusterName:      "",
+		ClusterIntention: "cooperative",
+		GameMode:         "survival",
+		MaxPlayers:       6,
+		Language:         "en",
+		TickRate:         15,
 		Shards: []domain.ShardConfig{
-			{Name: domain.ShardMaster, Enabled: true},
+			{Name: domain.ShardMaster, Enabled: true, ServerPort: 10999, MasterServerPort: 27016, AuthenticationPort: 8766},
 		},
 	})
 	if err == nil {
