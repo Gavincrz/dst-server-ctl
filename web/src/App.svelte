@@ -8,15 +8,12 @@
     type ClusterConfig,
     type ClusterFormState
   } from './lib/clusterForm';
-  import {
-    activeExpandedLogIDs,
-    activeExpandedTaskIDs,
-    taskLogButtonLabel,
-    type KeyedLogCollectionState,
-    type SingleLogPanelState
-  } from './lib/taskLogs';
+  import { closeLogStream, connectLogStream, type EventSourceLike } from './lib/logStream';
+  import { activeExpandedLogIDs, activeExpandedTaskIDs, taskLogButtonLabel, type KeyedLogCollectionState, type SingleLogPanelState } from './lib/taskLogs';
 
   const installPollIntervalMs = 3000;
+  const taskLogLineLimit = 160;
+  const runtimeLogLineLimit = 120;
 
   type ControllerStatus = {
     version: string;
@@ -139,6 +136,9 @@
   let clusterMessage = '';
   let runtimeMessage = '';
   let refreshedAt: Date | null = null;
+  const taskLogSources: Record<TaskLogKind, Partial<Record<string, EventSourceLike>>> = { install: {}, update: {} };
+  let updateCheckLogSource: EventSourceLike | null = null;
+  const runtimeLogSources: Partial<Record<RuntimeShardLogKind, EventSourceLike>> = {};
 
   async function fetchJSON<T>(path: string): Promise<T> {
     const response = await fetch(path);
@@ -187,16 +187,38 @@
 
   function taskLogEndpoint(kind: TaskLogKind, taskID: string) {
     return kind === 'install'
-      ? `/api/v1/install/tasks/${taskID}/logs?lines=160`
-      : `/api/v1/update/tasks/${taskID}/logs?lines=160`;
+      ? `/api/v1/install/tasks/${taskID}/logs?lines=${taskLogLineLimit}`
+      : `/api/v1/update/tasks/${taskID}/logs?lines=${taskLogLineLimit}`;
+  }
+
+  function taskLogStreamEndpoint(kind: TaskLogKind, taskID: string) {
+    return kind === 'install'
+      ? `/api/v1/install/tasks/${taskID}/logs/stream?lines=${taskLogLineLimit}`
+      : `/api/v1/update/tasks/${taskID}/logs/stream?lines=${taskLogLineLimit}`;
   }
 
   function taskLogUnavailableMessage(kind: TaskLogKind) {
     return kind === 'install' ? 'Install task logs unavailable' : 'Update task logs unavailable';
   }
 
+  function updateCheckLogEndpoint() {
+    return `/api/v1/update/check/logs?lines=${taskLogLineLimit}`;
+  }
+
+  function updateCheckLogStreamEndpoint() {
+    return `/api/v1/update/check/logs/stream?lines=${taskLogLineLimit}`;
+  }
+
+  function supportsEventSource() {
+    return typeof EventSource !== 'undefined';
+  }
+
   function runtimeLogEndpoint(shard: RuntimeShardLogKind) {
-    return `/api/v1/runtime/logs?shard=${shard}&lines=120`;
+    return `/api/v1/runtime/logs?shard=${shard}&lines=${runtimeLogLineLimit}`;
+  }
+
+  function runtimeLogStreamEndpoint(shard: RuntimeShardLogKind) {
+    return `/api/v1/runtime/logs/stream?shard=${shard}&lines=${runtimeLogLineLimit}`;
   }
 
   async function refresh(options: { background?: boolean } = {}) {
@@ -234,19 +256,18 @@
         clusterForm = clusterFormFromConfig(clusterConfig);
       }
 
-      if (activeExpandedTaskIDs(installTaskLogState.expanded, installTaskStatus).length > 0) {
+      if (!supportsEventSource() && activeExpandedTaskIDs(installTaskLogState.expanded, installTaskStatus).length > 0) {
         await refreshTaskLogs('install', installTaskStatus);
       }
-      if (activeExpandedTaskIDs(updateTaskLogState.expanded, updateTaskStatus).length > 0) {
+      if (!supportsEventSource() && activeExpandedTaskIDs(updateTaskLogState.expanded, updateTaskStatus).length > 0) {
         await refreshTaskLogs('update', updateTaskStatus);
       }
-      if (updateCheckLogState.expanded) {
+      if (!supportsEventSource() && updateCheckLogState.expanded) {
         await refreshUpdateCheckLogs();
       }
-      if (activeExpandedLogIDs(runtimeLogState.expanded, [{ id: 'Master' }, { id: 'Caves' }], () => runtimeStatus.status === 'running').length > 0) {
+      if (!supportsEventSource() && activeExpandedLogIDs(runtimeLogState.expanded, [{ id: 'Master' }, { id: 'Caves' }], () => true).length > 0) {
         await refreshRuntimeLogs(runtimeStatus);
       }
-
       refreshedAt = new Date();
     } catch (err) {
       refreshError = err instanceof Error ? err.message : 'Request failed';
@@ -559,6 +580,124 @@
     );
   }
 
+  function setRuntimeLogLoading(shard: RuntimeShardLogKind, loading: boolean) {
+    runtimeLogState = {
+      ...runtimeLogState,
+      loading: { ...runtimeLogState.loading, [shard]: loading }
+    };
+  }
+
+  function closeRuntimeLogStream(shard: RuntimeShardLogKind) {
+    closeLogStream(
+      () => runtimeLogSources[shard] ?? null,
+      (source) => {
+        if (source) {
+          runtimeLogSources[shard] = source;
+          return;
+        }
+        delete runtimeLogSources[shard];
+      }
+    );
+  }
+
+  function closeAllRuntimeLogStreams() {
+    closeRuntimeLogStream('Master');
+    closeRuntimeLogStream('Caves');
+  }
+
+  function setTaskLogLoading(kind: TaskLogKind, taskID: string, loading: boolean) {
+    const state = taskLogState(kind);
+    setTaskLogState(kind, {
+      ...state,
+      loading: { ...state.loading, [taskID]: loading }
+    });
+  }
+
+  function closeTaskLogStream(kind: TaskLogKind, taskID: string) {
+    closeLogStream(
+      () => taskLogSources[kind][taskID] ?? null,
+      (source) => {
+        if (source) {
+          taskLogSources[kind][taskID] = source;
+          return;
+        }
+        delete taskLogSources[kind][taskID];
+      }
+    );
+  }
+
+  function closeAllTaskLogStreams() {
+    Object.entries(taskLogSources.install).forEach(([taskID]) => closeTaskLogStream('install', taskID));
+    Object.entries(taskLogSources.update).forEach(([taskID]) => closeTaskLogStream('update', taskID));
+  }
+
+  function closeUpdateCheckLogStream() {
+    closeLogStream(
+      () => updateCheckLogSource,
+      (source) => {
+        updateCheckLogSource = source;
+      }
+    );
+  }
+
+  function applyTaskLogSnapshot(kind: TaskLogKind, taskID: string, lines: string[]) {
+    const state = taskLogState(kind);
+    setTaskLogState(kind, {
+      ...state,
+      logs: { ...state.logs, [taskID]: lines },
+      errors: { ...state.errors, [taskID]: '' },
+      loading: { ...state.loading, [taskID]: false }
+    });
+  }
+
+  function appendTaskLogLines(kind: TaskLogKind, taskID: string, lines: string[]) {
+    const state = taskLogState(kind);
+    const nextLines = [...(state.logs[taskID] ?? []), ...lines].slice(-taskLogLineLimit);
+    setTaskLogState(kind, {
+      ...state,
+      logs: { ...state.logs, [taskID]: nextLines },
+      errors: { ...state.errors, [taskID]: '' },
+      loading: { ...state.loading, [taskID]: false }
+    });
+  }
+
+  function applyUpdateCheckLogSnapshot(lines: string[]) {
+    updateCheckLogState = {
+      ...updateCheckLogState,
+      lines,
+      error: '',
+      loading: false
+    };
+  }
+
+  function appendUpdateCheckLogLines(lines: string[]) {
+    updateCheckLogState = {
+      ...updateCheckLogState,
+      lines: [...updateCheckLogState.lines, ...lines].slice(-taskLogLineLimit),
+      error: '',
+      loading: false
+    };
+  }
+
+  function applyRuntimeLogSnapshot(shard: RuntimeShardLogKind, lines: string[]) {
+    runtimeLogState = {
+      ...runtimeLogState,
+      logs: { ...runtimeLogState.logs, [shard]: lines },
+      errors: { ...runtimeLogState.errors, [shard]: '' },
+      loading: { ...runtimeLogState.loading, [shard]: false }
+    };
+  }
+
+  function appendRuntimeLogLines(shard: RuntimeShardLogKind, lines: string[]) {
+    const nextLines = [...(runtimeLogState.logs[shard] ?? []), ...lines].slice(-runtimeLogLineLimit);
+    runtimeLogState = {
+      ...runtimeLogState,
+      logs: { ...runtimeLogState.logs, [shard]: nextLines },
+      errors: { ...runtimeLogState.errors, [shard]: '' },
+      loading: { ...runtimeLogState.loading, [shard]: false }
+    };
+  }
+
   function resetClusterForm() {
     if (!cluster) {
       return;
@@ -723,9 +862,11 @@
   async function toggleTaskLogs(kind: TaskLogKind, taskID: string) {
     const state = taskLogState(kind);
     if (state.expanded[taskID]) {
+      closeTaskLogStream(kind, taskID);
       setTaskLogState(kind, {
         ...state,
-        expanded: { ...state.expanded, [taskID]: false }
+        expanded: { ...state.expanded, [taskID]: false },
+        loading: { ...state.loading, [taskID]: false }
       });
       return;
     }
@@ -735,14 +876,10 @@
       expanded: { ...state.expanded, [taskID]: true }
     });
 
-    if (state.logs[taskID] || state.loading[taskID]) {
-      return;
-    }
-
-    await loadTaskLogs(kind, taskID);
+    connectTaskLogs(kind, taskID);
   }
 
-  async function loadTaskLogs(kind: TaskLogKind, taskID: string) {
+  async function loadTaskLogsFallback(kind: TaskLogKind, taskID: string) {
     const state = taskLogState(kind);
     setTaskLogState(kind, {
       ...state,
@@ -752,11 +889,7 @@
 
     try {
       const payload = await fetchJSON<TaskLogResponse>(taskLogEndpoint(kind, taskID));
-      const currentState = taskLogState(kind);
-      setTaskLogState(kind, {
-        ...currentState,
-        logs: { ...currentState.logs, [taskID]: payload.lines }
-      });
+      applyTaskLogSnapshot(kind, taskID, payload.lines);
     } catch (err) {
       const currentState = taskLogState(kind);
       setTaskLogState(kind, {
@@ -767,11 +900,7 @@
         }
       });
     } finally {
-      const currentState = taskLogState(kind);
-      setTaskLogState(kind, {
-        ...currentState,
-        loading: { ...currentState.loading, [taskID]: false }
-      });
+      setTaskLogLoading(kind, taskID, false);
     }
   }
 
@@ -806,19 +935,16 @@
 
   async function toggleUpdateCheckLogs() {
     if (updateCheckLogState.expanded) {
-      updateCheckLogState = { ...updateCheckLogState, expanded: false };
+      closeUpdateCheckLogStream();
+      updateCheckLogState = { ...updateCheckLogState, expanded: false, loading: false };
       return;
     }
 
     updateCheckLogState = { ...updateCheckLogState, expanded: true };
-    if (updateCheckLogState.lines.length > 0 || updateCheckLogState.loading) {
-      return;
-    }
-
-    await loadUpdateCheckLogs();
+    connectUpdateCheckLogs();
   }
 
-  async function loadUpdateCheckLogs() {
+  async function loadUpdateCheckLogsFallback() {
     updateCheckLogState = {
       ...updateCheckLogState,
       loading: true,
@@ -826,11 +952,8 @@
     };
 
     try {
-      const payload = await fetchJSON<TaskLogResponse>('/api/v1/update/check/logs?lines=160');
-      updateCheckLogState = {
-        ...updateCheckLogState,
-        lines: payload.lines
-      };
+      const payload = await fetchJSON<TaskLogResponse>(updateCheckLogEndpoint());
+      applyUpdateCheckLogSnapshot(payload.lines);
     } catch (err) {
       updateCheckLogState = {
         ...updateCheckLogState,
@@ -846,12 +969,8 @@
 
   async function refreshUpdateCheckLogs() {
     try {
-      const payload = await fetchJSON<TaskLogResponse>('/api/v1/update/check/logs?lines=160');
-      updateCheckLogState = {
-        ...updateCheckLogState,
-        lines: payload.lines,
-        error: ''
-      };
+      const payload = await fetchJSON<TaskLogResponse>(updateCheckLogEndpoint());
+      applyUpdateCheckLogSnapshot(payload.lines);
     } catch (err) {
       updateCheckLogState = {
         ...updateCheckLogState,
@@ -860,11 +979,114 @@
     }
   }
 
+  function connectTaskLogs(kind: TaskLogKind, taskID: string) {
+    setTaskLogLoading(kind, taskID, true);
+    const state = taskLogState(kind);
+    setTaskLogState(kind, {
+      ...state,
+      errors: { ...state.errors, [taskID]: '' }
+    });
+
+    connectLogStream<TaskLogResponse>({
+      url: taskLogStreamEndpoint(kind, taskID),
+      current: () => taskLogSources[kind][taskID] ?? null,
+      replace: (source) => {
+        if (source) {
+          taskLogSources[kind][taskID] = source;
+          return;
+        }
+        delete taskLogSources[kind][taskID];
+      },
+      createEventSource: supportsEventSource() ? (url) => new EventSource(url) : null,
+      loadFallback: () => loadTaskLogsFallback(kind, taskID),
+      onSnapshot: (payload) => {
+        applyTaskLogSnapshot(kind, taskID, payload.lines);
+      },
+      onAppend: (payload) => {
+        appendTaskLogLines(kind, taskID, payload.lines);
+      },
+      onStreamError: (message) => {
+        const currentState = taskLogState(kind);
+        setTaskLogState(kind, {
+          ...currentState,
+          errors: {
+            ...currentState.errors,
+            [taskID]: message
+          },
+          loading: { ...currentState.loading, [taskID]: false }
+        });
+      },
+      onDisconnect: (message) => {
+        const currentState = taskLogState(kind);
+        setTaskLogState(kind, {
+          ...currentState,
+          errors: {
+            ...currentState.errors,
+            [taskID]: message
+          },
+          loading: { ...currentState.loading, [taskID]: false }
+        });
+      },
+      unavailableMessage: taskLogUnavailableMessage(kind),
+      disconnectedMessage: `${kind === 'install' ? 'Install' : 'Update'} task log stream disconnected. Retrying...`
+    });
+  }
+
+  function reconnectTaskLogs(kind: TaskLogKind, taskID: string) {
+    connectTaskLogs(kind, taskID);
+  }
+
+  function connectUpdateCheckLogs() {
+    updateCheckLogState = {
+      ...updateCheckLogState,
+      loading: true,
+      error: ''
+    };
+
+    connectLogStream<TaskLogResponse>({
+      url: updateCheckLogStreamEndpoint(),
+      current: () => updateCheckLogSource,
+      replace: (source) => {
+        updateCheckLogSource = source;
+      },
+      createEventSource: supportsEventSource() ? (url) => new EventSource(url) : null,
+      loadFallback: () => loadUpdateCheckLogsFallback(),
+      onSnapshot: (payload) => {
+        applyUpdateCheckLogSnapshot(payload.lines);
+      },
+      onAppend: (payload) => {
+        appendUpdateCheckLogLines(payload.lines);
+      },
+      onStreamError: (message) => {
+        updateCheckLogState = {
+          ...updateCheckLogState,
+          error: message,
+          loading: false
+        };
+      },
+      onDisconnect: (message) => {
+        updateCheckLogState = {
+          ...updateCheckLogState,
+          error: message,
+          loading: false
+        };
+      },
+      unavailableMessage: 'Update check logs unavailable',
+      disconnectedMessage: 'Update check log stream disconnected. Retrying...'
+    });
+  }
+
+  function reconnectUpdateCheckLogs() {
+    connectUpdateCheckLogs();
+  }
+
   async function toggleRuntimeLogs(shard: RuntimeShardLogKind) {
     if (runtimeLogState.expanded[shard]) {
+      closeRuntimeLogStream(shard);
       runtimeLogState = {
         ...runtimeLogState,
-        expanded: { ...runtimeLogState.expanded, [shard]: false }
+        expanded: { ...runtimeLogState.expanded, [shard]: false },
+        loading: { ...runtimeLogState.loading, [shard]: false }
       };
       return;
     }
@@ -874,14 +1096,10 @@
       expanded: { ...runtimeLogState.expanded, [shard]: true }
     };
 
-    if (runtimeLogState.logs[shard] || runtimeLogState.loading[shard]) {
-      return;
-    }
-
-    await loadRuntimeLogs(shard);
+    connectRuntimeLogs(shard);
   }
 
-  async function loadRuntimeLogs(shard: RuntimeShardLogKind) {
+  async function loadRuntimeLogsFallback(shard: RuntimeShardLogKind) {
     runtimeLogState = {
       ...runtimeLogState,
       loading: { ...runtimeLogState.loading, [shard]: true },
@@ -890,10 +1108,7 @@
 
     try {
       const payload = await fetchJSON<RuntimeLogResponse>(runtimeLogEndpoint(shard));
-      runtimeLogState = {
-        ...runtimeLogState,
-        logs: { ...runtimeLogState.logs, [shard]: payload.lines }
-      };
+      applyRuntimeLogSnapshot(shard, payload.lines);
     } catch (err) {
       runtimeLogState = {
         ...runtimeLogState,
@@ -903,16 +1118,13 @@
         }
       };
     } finally {
-      runtimeLogState = {
-        ...runtimeLogState,
-        loading: { ...runtimeLogState.loading, [shard]: false }
-      };
+      setRuntimeLogLoading(shard, false);
     }
   }
 
   async function refreshRuntimeLogs(runtimeStatus: RuntimeStatus | null) {
-    const shardIDs = activeExpandedLogIDs(runtimeLogState.expanded, [{ id: 'Master' }, { id: 'Caves' }], () => runtimeStatus?.status === 'running')
-      .filter((shardID) => !runtimeLogState.loading[shardID]);
+    const shardIDs = activeExpandedLogIDs(runtimeLogState.expanded, [{ id: 'Master' }, { id: 'Caves' }], () => true)
+      .filter((shardID) => !runtimeLogState.loading[shardID] && runtimeStatus?.status === 'running');
 
     if (shardIDs.length === 0) {
       return;
@@ -936,6 +1148,60 @@
         };
       }
     }));
+  }
+
+  function connectRuntimeLogs(shard: RuntimeShardLogKind) {
+    setRuntimeLogLoading(shard, true);
+    runtimeLogState = {
+      ...runtimeLogState,
+      errors: { ...runtimeLogState.errors, [shard]: '' }
+    };
+
+    connectLogStream<RuntimeLogResponse>({
+      url: runtimeLogStreamEndpoint(shard),
+      current: () => runtimeLogSources[shard] ?? null,
+      replace: (source) => {
+        if (source) {
+          runtimeLogSources[shard] = source;
+          return;
+        }
+        delete runtimeLogSources[shard];
+      },
+      createEventSource: supportsEventSource() ? (url) => new EventSource(url) : null,
+      loadFallback: () => loadRuntimeLogsFallback(shard),
+      onSnapshot: (payload) => {
+        applyRuntimeLogSnapshot(shard, payload.lines);
+      },
+      onAppend: (payload) => {
+        appendRuntimeLogLines(shard, payload.lines);
+      },
+      onStreamError: (message) => {
+        runtimeLogState = {
+          ...runtimeLogState,
+          errors: {
+            ...runtimeLogState.errors,
+            [shard]: message
+          },
+          loading: { ...runtimeLogState.loading, [shard]: false }
+        };
+      },
+      onDisconnect: (message) => {
+        runtimeLogState = {
+          ...runtimeLogState,
+          errors: {
+            ...runtimeLogState.errors,
+            [shard]: message
+          },
+          loading: { ...runtimeLogState.loading, [shard]: false }
+        };
+      },
+      unavailableMessage: 'Runtime log stream unavailable',
+      disconnectedMessage: 'Runtime log stream disconnected. Retrying...'
+    });
+  }
+
+  function reconnectRuntimeLogs(shard: RuntimeShardLogKind) {
+    connectRuntimeLogs(shard);
   }
 
   async function startRuntime() {
@@ -1046,6 +1312,9 @@
     }, installPollIntervalMs);
 
     return () => {
+      closeAllTaskLogStreams();
+      closeUpdateCheckLogStream();
+      closeAllRuntimeLogStreams();
       if (pollTimer) {
         clearInterval(pollTimer);
       }
@@ -1216,8 +1485,8 @@
           {updateCheckLogButtonLabel()}
         </button>
         {#if updateCheckLogState.expanded}
-          <button type="button" class="secondary-action" disabled={updateCheckLogState.loading} on:click={loadUpdateCheckLogs}>
-            {updateCheckLogState.loading ? 'Refreshing Check Logs' : 'Refresh Check Logs'}
+          <button type="button" class="secondary-action" disabled={updateCheckLogState.loading} on:click={reconnectUpdateCheckLogs}>
+            {updateCheckLogState.loading ? 'Connecting Check Logs' : 'Reconnect Check Logs'}
           </button>
         {/if}
       </div>
@@ -1265,8 +1534,8 @@
                 {updateTaskLogButtonLabel(task.id)}
               </button>
               {#if updateTaskLogState.expanded[task.id]}
-                <button type="button" class="secondary-action" disabled={updateTaskLogState.loading[task.id]} on:click={() => loadTaskLogs('update', task.id)}>
-                  {updateTaskLogState.loading[task.id] ? 'Refreshing Logs' : 'Refresh Logs'}
+                <button type="button" class="secondary-action" disabled={updateTaskLogState.loading[task.id]} on:click={() => reconnectTaskLogs('update', task.id)}>
+                  {updateTaskLogState.loading[task.id] ? 'Connecting Logs' : 'Reconnect Logs'}
                 </button>
               {/if}
             </div>
@@ -1389,8 +1658,8 @@
             {runtimeLogButtonLabel('Master')}
           </button>
           {#if runtimeLogState.expanded.Master}
-            <button type="button" class="secondary-action" disabled={runtimeLogState.loading.Master} on:click={() => loadRuntimeLogs('Master')}>
-              {runtimeLogState.loading.Master ? 'Refreshing Master Logs' : 'Refresh Master Logs'}
+            <button type="button" class="secondary-action" disabled={runtimeLogState.loading.Master} on:click={() => reconnectRuntimeLogs('Master')}>
+              {runtimeLogState.loading.Master ? 'Connecting Master Logs' : 'Reconnect Master Logs'}
             </button>
           {/if}
         </div>
@@ -1415,8 +1684,8 @@
             {runtimeLogButtonLabel('Caves')}
           </button>
           {#if runtimeLogState.expanded.Caves}
-            <button type="button" class="secondary-action" disabled={runtimeLogState.loading.Caves} on:click={() => loadRuntimeLogs('Caves')}>
-              {runtimeLogState.loading.Caves ? 'Refreshing Caves Logs' : 'Refresh Caves Logs'}
+            <button type="button" class="secondary-action" disabled={runtimeLogState.loading.Caves} on:click={() => reconnectRuntimeLogs('Caves')}>
+              {runtimeLogState.loading.Caves ? 'Connecting Caves Logs' : 'Reconnect Caves Logs'}
             </button>
           {/if}
         </div>
@@ -1730,8 +1999,8 @@
                   {installTaskLogButtonLabel(task.id)}
                 </button>
                 {#if installTaskLogState.expanded[task.id]}
-                  <button type="button" class="secondary-action" disabled={installTaskLogState.loading[task.id]} on:click={() => loadTaskLogs('install', task.id)}>
-                    {installTaskLogState.loading[task.id] ? 'Refreshing Logs' : 'Refresh Logs'}
+                  <button type="button" class="secondary-action" disabled={installTaskLogState.loading[task.id]} on:click={() => reconnectTaskLogs('install', task.id)}>
+                    {installTaskLogState.loading[task.id] ? 'Connecting Logs' : 'Reconnect Logs'}
                   </button>
                 {/if}
               </div>

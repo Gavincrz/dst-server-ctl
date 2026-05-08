@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	nethttp "net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -349,6 +350,61 @@ func TestInstallTaskLogsEndpoint(t *testing.T) {
 	}
 }
 
+func TestInstallTaskLogStreamEndpoint(t *testing.T) {
+	logs := &streamingTaskLogService{
+		snapshots: map[string][][]string{
+			"task-1": {
+				{"steamcmd: starting"},
+				{"steamcmd: starting", "steamcmd: downloading"},
+			},
+		},
+	}
+	router := NewRouter(testLogger(), Services{
+		Status:          fakeStatusReader{},
+		Installation:    fakeInstallationStatusReader{},
+		Cluster:         fakeClusterConfigService{},
+		InstallTasks:    fakeInstallationTaskService{},
+		InstallTaskLogs: logs,
+		UpdateCheckLogs: fakeUpdateCheckLogService{},
+		UpdateTaskLogs:  fakeUpdateTaskLogService{},
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	request := httptest.NewRequest(nethttp.MethodGet, "/api/v1/install/tasks/task-1/logs/stream?lines=50", nil).WithContext(ctx)
+	response := httptest.NewRecorder()
+	done := make(chan struct{})
+	go func() {
+		router.ServeHTTP(response, request)
+		close(done)
+	}()
+
+	deadline := time.Now().Add(1500 * time.Millisecond)
+	for !strings.Contains(response.Body.String(), "event: append") {
+		if time.Now().After(deadline) {
+			cancel()
+			<-done
+			t.Fatalf("stream body = %q, want append event", response.Body.String())
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+
+	cancel()
+	<-done
+
+	if got := response.Header().Get("Content-Type"); got != "text/event-stream" {
+		t.Fatalf("content type = %q, want text/event-stream", got)
+	}
+	body := response.Body.String()
+	if !strings.Contains(body, "\"taskId\":\"task-1\"") {
+		t.Fatalf("stream body = %q, want task id payload", body)
+	}
+	if !strings.Contains(body, "steamcmd: downloading") {
+		t.Fatalf("stream body = %q, want appended log line", body)
+	}
+}
+
 func TestUpdateTaskLogsEndpoint(t *testing.T) {
 	router := NewRouter(testLogger(), Services{
 		Status:          fakeStatusReader{},
@@ -380,6 +436,58 @@ func TestUpdateTaskLogsEndpoint(t *testing.T) {
 	}
 }
 
+func TestUpdateTaskLogStreamEndpoint(t *testing.T) {
+	logs := &streamingTaskLogService{
+		snapshots: map[string][][]string{
+			"task-2": {
+				{"steamcmd: updating"},
+				{"steamcmd: updating", "steamcmd: validating"},
+			},
+		},
+	}
+	router := NewRouter(testLogger(), Services{
+		Status:          fakeStatusReader{},
+		Installation:    fakeInstallationStatusReader{},
+		Cluster:         fakeClusterConfigService{},
+		InstallTasks:    fakeInstallationTaskService{},
+		InstallTaskLogs: fakeInstallTaskLogService{},
+		UpdateCheckLogs: fakeUpdateCheckLogService{},
+		UpdateTaskLogs:  logs,
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	request := httptest.NewRequest(nethttp.MethodGet, "/api/v1/update/tasks/task-2/logs/stream?lines=50", nil).WithContext(ctx)
+	response := httptest.NewRecorder()
+	done := make(chan struct{})
+	go func() {
+		router.ServeHTTP(response, request)
+		close(done)
+	}()
+
+	deadline := time.Now().Add(1500 * time.Millisecond)
+	for !strings.Contains(response.Body.String(), "event: append") {
+		if time.Now().After(deadline) {
+			cancel()
+			<-done
+			t.Fatalf("stream body = %q, want append event", response.Body.String())
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+
+	cancel()
+	<-done
+
+	body := response.Body.String()
+	if !strings.Contains(body, "\"taskId\":\"task-2\"") {
+		t.Fatalf("stream body = %q, want task id payload", body)
+	}
+	if !strings.Contains(body, "steamcmd: validating") {
+		t.Fatalf("stream body = %q, want appended log line", body)
+	}
+}
+
 func TestUpdateCheckLogsEndpoint(t *testing.T) {
 	router := NewRouter(testLogger(), Services{
 		Status:          fakeStatusReader{},
@@ -408,6 +516,56 @@ func TestUpdateCheckLogsEndpoint(t *testing.T) {
 	}
 	if len(payload.Lines) != 2 {
 		t.Fatalf("line count = %d, want 2", len(payload.Lines))
+	}
+}
+
+func TestUpdateCheckLogStreamEndpoint(t *testing.T) {
+	logs := &streamingUpdateCheckLogService{
+		snapshots: [][]string{
+			{"checking remote build"},
+			{"checking remote build", "buildid=12345"},
+		},
+	}
+	router := NewRouter(testLogger(), Services{
+		Status:          fakeStatusReader{},
+		Installation:    fakeInstallationStatusReader{},
+		Cluster:         fakeClusterConfigService{},
+		InstallTasks:    fakeInstallationTaskService{},
+		InstallTaskLogs: fakeInstallTaskLogService{},
+		UpdateCheckLogs: logs,
+		UpdateTaskLogs:  fakeUpdateTaskLogService{},
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	request := httptest.NewRequest(nethttp.MethodGet, "/api/v1/update/check/logs/stream?lines=50", nil).WithContext(ctx)
+	response := httptest.NewRecorder()
+	done := make(chan struct{})
+	go func() {
+		router.ServeHTTP(response, request)
+		close(done)
+	}()
+
+	deadline := time.Now().Add(1500 * time.Millisecond)
+	for !strings.Contains(response.Body.String(), "event: append") {
+		if time.Now().After(deadline) {
+			cancel()
+			<-done
+			t.Fatalf("stream body = %q, want append event", response.Body.String())
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+
+	cancel()
+	<-done
+
+	body := response.Body.String()
+	if !strings.Contains(body, "\"taskId\":\"update-check\"") {
+		t.Fatalf("stream body = %q, want update-check payload", body)
+	}
+	if !strings.Contains(body, "buildid=12345") {
+		t.Fatalf("stream body = %q, want appended log line", body)
 	}
 }
 
@@ -681,6 +839,79 @@ func TestRuntimeLogsEndpoint(t *testing.T) {
 	}
 }
 
+func TestRuntimeLogStreamEndpoint(t *testing.T) {
+	logs := &streamingRuntimeLogService{
+		snapshots: [][]string{
+			{"[00:00:01]: Boot"},
+			{"[00:00:01]: Boot", "[00:00:02]: Ready"},
+		},
+	}
+	router := NewRouter(testLogger(), Services{
+		Status:         fakeStatusReader{},
+		Installation:   fakeInstallationStatusReader{},
+		Cluster:        fakeClusterConfigService{},
+		InstallTasks:   fakeInstallationTaskService{},
+		Runtime:        fakeRuntimeService{},
+		RuntimeLogs:    logs,
+		RuntimeHistory: fakeRuntimeHistoryService{},
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	request := httptest.NewRequest(nethttp.MethodGet, "/api/v1/runtime/logs/stream?shard=Master&lines=50", nil).WithContext(ctx)
+	response := httptest.NewRecorder()
+	done := make(chan struct{})
+	go func() {
+		router.ServeHTTP(response, request)
+		close(done)
+	}()
+
+	deadline := time.Now().Add(1500 * time.Millisecond)
+	for !strings.Contains(response.Body.String(), "event: append") {
+		if time.Now().After(deadline) {
+			cancel()
+			<-done
+			t.Fatalf("stream body = %q, want append event", response.Body.String())
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+
+	cancel()
+	<-done
+
+	if got := response.Header().Get("Content-Type"); got != "text/event-stream" {
+		t.Fatalf("content type = %q, want text/event-stream", got)
+	}
+	body := response.Body.String()
+	if !strings.Contains(body, "event: snapshot") {
+		t.Fatalf("stream body = %q, want snapshot event", body)
+	}
+	if !strings.Contains(body, "event: append") {
+		t.Fatalf("stream body = %q, want append event", body)
+	}
+	if !strings.Contains(body, "[00:00:02]: Ready") {
+		t.Fatalf("stream body = %q, want appended log line", body)
+	}
+}
+
+func TestRuntimeLogStreamEventUsesAppendForSlidingTail(t *testing.T) {
+	event, lines, changed := runtimeLogStreamEvent(
+		[]string{"[00:00:01]: Boot", "[00:00:02]: Ready"},
+		[]string{"[00:00:02]: Ready", "[00:00:03]: Tick"},
+	)
+
+	if !changed {
+		t.Fatal("changed = false, want true")
+	}
+	if event != "append" {
+		t.Fatalf("event = %q, want append", event)
+	}
+	if got, want := lines, []string{"[00:00:03]: Tick"}; !slices.Equal(got, want) {
+		t.Fatalf("lines = %#v, want %#v", got, want)
+	}
+}
+
 func TestRuntimeHistoryEndpoint(t *testing.T) {
 	router := NewRouter(testLogger(), Services{
 		Status:       fakeStatusReader{},
@@ -768,6 +999,21 @@ type fakeRuntimeService struct {
 type fakeRuntimeLogService struct {
 	lines []string
 	err   error
+}
+
+type streamingRuntimeLogService struct {
+	snapshots [][]string
+	calls     int
+}
+
+type streamingTaskLogService struct {
+	snapshots map[string][][]string
+	calls     map[string]int
+}
+
+type streamingUpdateCheckLogService struct {
+	snapshots [][]string
+	calls     int
 }
 
 type fakeInstallTaskLogService struct {
@@ -871,6 +1117,53 @@ func (s fakeRuntimeLogService) Get(context.Context, domain.ShardName, int) ([]st
 		return nil, s.err
 	}
 	return s.lines, nil
+}
+
+func (s *streamingRuntimeLogService) Get(context.Context, domain.ShardName, int) ([]string, error) {
+	if len(s.snapshots) == 0 {
+		return []string{}, nil
+	}
+	if s.calls >= len(s.snapshots) {
+		return s.snapshots[len(s.snapshots)-1], nil
+	}
+
+	lines := s.snapshots[s.calls]
+	s.calls++
+	return lines, nil
+}
+
+func (s *streamingTaskLogService) Get(_ context.Context, taskID domain.TaskID, _ int) ([]string, error) {
+	if s.calls == nil {
+		s.calls = map[string]int{}
+	}
+
+	key := string(taskID)
+	snapshots := s.snapshots[key]
+	if len(snapshots) == 0 {
+		return []string{}, nil
+	}
+
+	call := s.calls[key]
+	if call >= len(snapshots) {
+		return snapshots[len(snapshots)-1], nil
+	}
+
+	lines := snapshots[call]
+	s.calls[key] = call + 1
+	return lines, nil
+}
+
+func (s *streamingUpdateCheckLogService) Get(context.Context, int) ([]string, error) {
+	if len(s.snapshots) == 0 {
+		return []string{}, nil
+	}
+	if s.calls >= len(s.snapshots) {
+		return s.snapshots[len(s.snapshots)-1], nil
+	}
+
+	lines := s.snapshots[s.calls]
+	s.calls++
+	return lines, nil
 }
 
 func (s fakeInstallTaskLogService) Get(context.Context, domain.TaskID, int) ([]string, error) {
