@@ -71,3 +71,25 @@ harness 采用短 `AGENTS.md`、当前架构文档、决策记录和任务跟踪
 - watcher 实现仍放在 `adapter/logtail`，和当前基于 `offset` 的文件读取共用同一份增量拼行逻辑。
 - 保留低频 fallback poll，处理 watcher 丢事件和文件替换场景。
 - 文件轮转、截断、删除重建统一视为日志源重置，对 SSE 发送新的 `snapshot`，不要尝试跨文件拼接旧上下文。
+
+## Dashboard 细粒度事件
+
+当前 dashboard SSE 是整包 `snapshot` 模型，适合替换页面级普通轮询，但还不是细粒度事件总线。
+
+候选内容拆分后，性质不同：
+
+- `runtimeHistory`：
+  这是持久化状态，天然适合继续细化成 append-only 事件流。后端已有运行历史仓储和列表 API，后续若要减少整包 snapshot 传输，优先从这里开始最合理。
+- 安装/更新任务列表与版本状态：
+  也属于后端真实状态，可以事件化，但需要明确“task changed”“update state changed”这类稳定事件类型，否则只是把整包 snapshot 切碎，收益有限。
+- cluster 保存结果、运行控制成功提示、安装/更新按钮后的成功提示：
+  这些当前主要是前端根据单次 HTTP 操作结果生成的临时回执，不是后端持久状态。若直接塞进 dashboard SSE，会把 UI 文案、提示时机和后端协议耦合起来。
+
+当前结论：
+
+- 暂不把 `clusterMessage`、`runtimeMessage`、`actionMessage`、`updateMessage` 这一类临时回执并入 dashboard SSE。
+- 若后续确实需要跨标签页、跨刷新保留“最近操作结果”，应先在后端定义独立的操作事件模型或通知模型，而不是复用 dashboard 状态流。
+- 下一步若继续细化 dashboard，优先顺序应是：
+  1. `runtimeHistory` append 事件。
+  2. 安装/更新任务状态变更事件。
+  3. 版本检查状态变更事件。
