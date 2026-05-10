@@ -1,5 +1,10 @@
 # 任务
 
+规则：
+
+- 每次只处理一个任务。
+- 如果当前任务跨度过大，先拆成更小的可交付任务，再开始其中一个。
+
 ## 当前状态
 
 - [x] 初始化 git 仓库。
@@ -40,15 +45,17 @@
 - [x] 评估 dashboard 是否继续承载 cluster 保存结果、运行历史和控制操作回执，并记录“只继续事件化真实后端状态，不把临时 UI 回执并入状态流”的结论。
 - [x] 梳理 DST 服务器配置的完整分层和来源，明确 `cluster.ini`、`server.ini`、世界配置文件、附属列表文件和模组配置的边界，并把结论记录到 `docs/CONFIGURATION.md`。
 - [x] 扩展 cluster/shared 与 shard/network 的结构化状态，补齐 `cluster.ini`、`server.ini` 的主要参数边界，并接入 API、SQLite、writer 和 Web UI。
+- [x] 把世界配置主源定为 `worldgenoverride.lua`，并先实现每 shard 的 preset + overrides 结构、持久化和文件生成链路。
 
-当前项目已有 harness、工程骨架、managed root 路径布局、共享 command runner、SQLite 状态存储基础层、启动时 managed root 初始化、安装状态 API、安装任务 API、任务模型、由任务驱动的 SteamCMD/DST 安装执行流程、初始化状态页、可反映控制器启动时间的基础运行状态、受管 cluster 的结构化配置状态和 `GET/PUT /api/v1/cluster` 读写 API、由该状态生成的 `cluster.ini` 与 `server.ini` 基础输出、扩展后的 cluster/shared 与 shard/network 结构化参数（包括 cluster intention、offline/lan、tick rate、console、bind/master port、cluster key，以及每 shard 的 game/steam/auth 端口）、接入 Web UI 的 cluster 配置表单/保存/重置和前端测试、基于 managed root `clusters/primary` 布局的 DST shard 启动命令生成与运行时启动 service、`GET /api/v1/runtime`、`POST /api/v1/runtime/start`、`POST /api/v1/runtime/stop`、`POST /api/v1/runtime/restart` 与对应的运行态 Web 控制面板、写入 `logs/master.log`/`logs/caves.log` 的 shard 日志落盘、最近日志读取 API 和日志展示面板、shard 异常退出后的自动状态清理与错误回传、基于启动时配置快照的 `restartRequired` 判定、持久化到 SQLite 的 runtime history 与一次自动重试策略，以及带有本地/远端版本比较、手动检查、手动更新、启动后定时检查、运行中更新保护、停服确认、更新任务日志读取/失败排查入口、安装任务日志查看入口、安装/更新任务展开日志自动刷新、活跃任务过滤、统一日志面板刷新抽象、runtime shard 日志面板统一展开/刷新交互、runtime/安装/更新/版本检查日志 SSE 持续推流、基于文件 offset 的服务端增量日志读取、dashboard 汇总 SSE、前端普通状态轮询分级降频、前端 SSE 连接/断线/回退测试和版本检查日志落盘/排查入口的 DST 更新流程。
+当前项目已有 harness、工程骨架、managed root 路径布局、共享 command runner、SQLite 状态存储基础层、启动时 managed root 初始化、安装状态 API、安装任务 API、任务模型、由任务驱动的 SteamCMD/DST 安装执行流程、初始化状态页、可反映控制器启动时间的基础运行状态、受管 cluster 的结构化配置状态和 `GET/PUT /api/v1/cluster` 读写 API、由该状态生成的 `cluster.ini`、`server.ini` 与 `worldgenoverride.lua` 基础输出、扩展后的 cluster/shared 与 shard/network 结构化参数（包括 cluster intention、offline/lan、tick rate、console、bind/master port、cluster key，以及每 shard 的 game/steam/auth 端口）、每 shard 的 world preset + overrides 结构化状态和持久化、接入 Web UI 的 cluster 配置表单/保存/重置和前端测试、基于 managed root `clusters/primary` 布局的 DST shard 启动命令生成与运行时启动 service、`GET /api/v1/runtime`、`POST /api/v1/runtime/start`、`POST /api/v1/runtime/stop`、`POST /api/v1/runtime/restart` 与对应的运行态 Web 控制面板、写入 `logs/master.log`/`logs/caves.log` 的 shard 日志落盘、最近日志读取 API 和日志展示面板、shard 异常退出后的自动状态清理与错误回传、基于启动时配置快照的 `restartRequired` 判定、持久化到 SQLite 的 runtime history 与一次自动重试策略，以及带有本地/远端版本比较、手动检查、手动更新、启动后定时检查、运行中更新保护、停服确认、更新任务日志读取/失败排查入口、安装任务日志查看入口、安装/更新任务展开日志自动刷新、活跃任务过滤、统一日志面板刷新抽象、runtime shard 日志面板统一展开/刷新交互、runtime/安装/更新/版本检查日志 SSE 持续推流、基于文件 offset 的服务端增量日志读取、dashboard 汇总 SSE、前端普通状态轮询分级降频、前端 SSE 连接/断线/回退测试和版本检查日志落盘/排查入口的 DST 更新流程。
 
 ## 下一任务
 
 - [x] 梳理 DST 服务器配置的完整分层和来源，明确 `cluster.ini`、`server.ini`、世界配置文件、附属列表文件和模组配置的边界，并把结论记录到 `docs/CONFIGURATION.md`。
 - [x] 先扩展 cluster/shared 与 shard/network 的结构化状态，补齐 `cluster.ini`、`server.ini` 的主要参数边界，并接入基础 UI。
+- [x] 把世界配置主源定为 `worldgenoverride.lua`，先实现每 shard 的 preset + overrides 结构和生成链路。
 - [ ] 在服务器配置实现上以“最终全量参数可配置”为目标推进；首轮可以先挑少量参数验证链路，但不能把当前少量字段当成最终范围。
-- [ ] 把世界配置主源定为 `worldgenoverride.lua`，先设计每 shard 的 preset + overrides 结构，再决定是否需要 `leveldataoverride.lua` 兼容输出。
+- [ ] 继续补世界配置字段覆盖面；首轮已支持 preset + overrides，但还没有把常用世界参数做成结构化可发现的表单项。
 - [ ] 语言相关先以英语为默认和首个完整支持目标；若找不到 Klei 官方维护的完整语言代码对照表，则记录为待确认项，不阻塞配置主线。
 - [ ] 在实时刷新、dashboard 事件细化和其他体验优化上降级优先级，后续先聚焦服务器配置、世界配置和 mod 管理。
 

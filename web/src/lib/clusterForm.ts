@@ -4,6 +4,13 @@ export type ClusterShard = {
   serverPort: number;
   masterServerPort: number;
   authenticationPort: number;
+  worldGenPreset: string;
+  worldGenOverrides: WorldOverride[];
+};
+
+export type WorldOverride = {
+  key: string;
+  value: string;
 };
 
 export type ClusterConfig = {
@@ -70,9 +77,13 @@ export type ClusterFormState = {
   masterServerPort: string;
   masterMasterServerPort: string;
   masterAuthenticationPort: string;
+  masterWorldGenPreset: string;
+  masterWorldGenOverrides: string;
   cavesServerPort: string;
   cavesMasterServerPort: string;
   cavesAuthenticationPort: string;
+  cavesWorldGenPreset: string;
+  cavesWorldGenOverrides: string;
 };
 
 export function clusterFormFromConfig(config: ClusterConfig): ClusterFormState {
@@ -101,9 +112,13 @@ export function clusterFormFromConfig(config: ClusterConfig): ClusterFormState {
     masterServerPort: String(master.serverPort),
     masterMasterServerPort: String(master.masterServerPort),
     masterAuthenticationPort: String(master.authenticationPort),
+    masterWorldGenPreset: master.worldGenPreset,
+    masterWorldGenOverrides: formatWorldOverrides(master.worldGenOverrides),
     cavesServerPort: String(caves.serverPort),
     cavesMasterServerPort: String(caves.masterServerPort),
-    cavesAuthenticationPort: String(caves.authenticationPort)
+    cavesAuthenticationPort: String(caves.authenticationPort),
+    cavesWorldGenPreset: caves.worldGenPreset,
+    cavesWorldGenOverrides: formatWorldOverrides(caves.worldGenOverrides)
   };
 }
 
@@ -163,14 +178,18 @@ export function clusterRequestFromForm(form: ClusterFormState): ClusterUpdateReq
         enabled: form.masterEnabled,
         serverPort: parseNumber(form.masterServerPort),
         masterServerPort: parseNumber(form.masterMasterServerPort),
-        authenticationPort: parseNumber(form.masterAuthenticationPort)
+        authenticationPort: parseNumber(form.masterAuthenticationPort),
+        worldGenPreset: form.masterWorldGenPreset,
+        worldGenOverrides: parseWorldOverrides(form.masterWorldGenOverrides)
       },
       {
         name: 'Caves',
         enabled: form.cavesEnabled,
         serverPort: parseNumber(form.cavesServerPort),
         masterServerPort: parseNumber(form.cavesMasterServerPort),
-        authenticationPort: parseNumber(form.cavesAuthenticationPort)
+        authenticationPort: parseNumber(form.cavesAuthenticationPort),
+        worldGenPreset: form.cavesWorldGenPreset,
+        worldGenOverrides: parseWorldOverrides(form.cavesWorldGenOverrides)
       }
     ]
   };
@@ -191,11 +210,37 @@ function shard(shards: ClusterShard[], name: 'Master' | 'Caves'): ClusterShard {
     enabled: name === 'Master',
     serverPort: 0,
     masterServerPort: 0,
-    authenticationPort: 0
+    authenticationPort: 0,
+    worldGenPreset: name === 'Master' ? 'SURVIVAL_TOGETHER' : 'DST_CAVE',
+    worldGenOverrides: []
   };
 }
 
 function parseNumber(value: string): number {
   const parsed = Number.parseInt(value.trim(), 10);
   return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function formatWorldOverrides(overrides: WorldOverride[]): string {
+  return [...overrides]
+    .sort((a, b) => a.key.localeCompare(b.key))
+    .map((override) => `${override.key}=${override.value}`)
+    .join('\n');
+}
+
+function parseWorldOverrides(value: string): WorldOverride[] {
+  return value
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .map((line) => {
+      const separator = line.indexOf('=');
+      if (separator < 0) {
+        return { key: line, value: '' };
+      }
+      return {
+        key: line.slice(0, separator).trim(),
+        value: line.slice(separator + 1).trim()
+      };
+    });
 }

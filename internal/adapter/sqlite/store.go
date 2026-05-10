@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"maps"
 	"time"
 
 	"dst-server-ctl/internal/domain"
@@ -298,17 +299,32 @@ ON CONFLICT(id) DO UPDATE SET
 	if _, err := tx.ExecContext(ctx, `DELETE FROM cluster_shards`); err != nil {
 		return fmt.Errorf("clear cluster shards: %w", err)
 	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM cluster_shard_world_overrides`); err != nil {
+		return fmt.Errorf("clear cluster shard world overrides: %w", err)
+	}
 	for _, shard := range row.Shards {
 		if _, err := tx.ExecContext(ctx, `
-INSERT INTO cluster_shards (name, enabled, server_port, master_server_port, authentication_port)
-VALUES (?, ?, ?, ?, ?)`,
+INSERT INTO cluster_shards (name, enabled, server_port, master_server_port, authentication_port, worldgen_preset)
+VALUES (?, ?, ?, ?, ?, ?)`,
 			shard.Name,
 			shard.Enabled,
 			shard.ServerPort,
 			shard.MasterServerPort,
 			shard.AuthenticationPort,
+			shard.WorldGenPreset,
 		); err != nil {
 			return fmt.Errorf("save cluster shard %s: %w", shard.Name, err)
+		}
+		for key, value := range shard.WorldGenOverrides {
+			if _, err := tx.ExecContext(ctx, `
+INSERT INTO cluster_shard_world_overrides (shard_name, override_key, override_value)
+VALUES (?, ?, ?)`,
+				shard.Name,
+				key,
+				value,
+			); err != nil {
+				return fmt.Errorf("save cluster shard %s world override %s: %w", shard.Name, key, err)
+			}
 		}
 	}
 
@@ -616,6 +632,8 @@ type clusterShardRow struct {
 	ServerPort         int
 	MasterServerPort   int
 	AuthenticationPort int
+	WorldGenPreset     string
+	WorldGenOverrides  map[string]string
 }
 
 func clusterConfigRowFromDomain(config domain.ClusterConfig) clusterConfigRow {
@@ -627,6 +645,8 @@ func clusterConfigRowFromDomain(config domain.ClusterConfig) clusterConfigRow {
 			ServerPort:         shard.ServerPort,
 			MasterServerPort:   shard.MasterServerPort,
 			AuthenticationPort: shard.AuthenticationPort,
+			WorldGenPreset:     shard.WorldGenPreset,
+			WorldGenOverrides:  maps.Clone(shard.WorldGenOverrides),
 		})
 	}
 
@@ -671,6 +691,8 @@ func (r clusterConfigRow) toDomain() (domain.ClusterConfig, error) {
 			ServerPort:         shard.ServerPort,
 			MasterServerPort:   shard.MasterServerPort,
 			AuthenticationPort: shard.AuthenticationPort,
+			WorldGenPreset:     shard.WorldGenPreset,
+			WorldGenOverrides:  maps.Clone(shard.WorldGenOverrides),
 		})
 	}
 
@@ -698,7 +720,7 @@ func (r clusterConfigRow) toDomain() (domain.ClusterConfig, error) {
 }
 
 func (s *Store) listClusterShards(ctx context.Context) ([]clusterShardRow, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT name, enabled, server_port, master_server_port, authentication_port FROM cluster_shards ORDER BY CASE name WHEN 'Master' THEN 0 WHEN 'Caves' THEN 1 ELSE 2 END, name`)
+	rows, err := s.db.QueryContext(ctx, `SELECT name, enabled, server_port, master_server_port, authentication_port, worldgen_preset FROM cluster_shards ORDER BY CASE name WHEN 'Master' THEN 0 WHEN 'Caves' THEN 1 ELSE 2 END, name`)
 	if err != nil {
 		return nil, fmt.Errorf("list cluster shards: %w", err)
 	}
@@ -707,7 +729,7 @@ func (s *Store) listClusterShards(ctx context.Context) ([]clusterShardRow, error
 	var shards []clusterShardRow
 	for rows.Next() {
 		var shard clusterShardRow
-		if err := rows.Scan(&shard.Name, &shard.Enabled, &shard.ServerPort, &shard.MasterServerPort, &shard.AuthenticationPort); err != nil {
+		if err := rows.Scan(&shard.Name, &shard.Enabled, &shard.ServerPort, &shard.MasterServerPort, &shard.AuthenticationPort, &shard.WorldGenPreset); err != nil {
 			return nil, fmt.Errorf("scan cluster shard: %w", err)
 		}
 		shards = append(shards, shard)
@@ -715,8 +737,42 @@ func (s *Store) listClusterShards(ctx context.Context) ([]clusterShardRow, error
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate cluster shards: %w", err)
 	}
+	if err := rows.Close(); err != nil {
+		return nil, fmt.Errorf("close cluster shard rows: %w", err)
+	}
+
+	for i := range shards {
+		overrides, err := s.listWorldOverridesByShard(ctx, shards[i].Name)
+		if err != nil {
+			return nil, err
+		}
+		shards[i].WorldGenOverrides = overrides
+	}
 
 	return shards, nil
+}
+
+func (s *Store) listWorldOverridesByShard(ctx context.Context, shardName string) (map[string]string, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT override_key, override_value FROM cluster_shard_world_overrides WHERE shard_name = ? ORDER BY override_key`, shardName)
+	if err != nil {
+		return nil, fmt.Errorf("list cluster shard world overrides for %s: %w", shardName, err)
+	}
+	defer rows.Close()
+
+	overrides := map[string]string{}
+	for rows.Next() {
+		var key string
+		var value string
+		if err := rows.Scan(&key, &value); err != nil {
+			return nil, fmt.Errorf("scan cluster shard world override for %s: %w", shardName, err)
+		}
+		overrides[key] = value
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate cluster shard world overrides for %s: %w", shardName, err)
+	}
+
+	return overrides, nil
 }
 
 func nullableTime(value *time.Time) sql.NullString {

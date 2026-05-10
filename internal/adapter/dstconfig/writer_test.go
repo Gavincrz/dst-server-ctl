@@ -33,8 +33,8 @@ func TestWriterWritesClusterAndShardConfigFiles(t *testing.T) {
 		MasterPort:         12000,
 		ClusterKey:         "cluster-abc",
 		Shards: []domain.ShardConfig{
-			{Name: domain.ShardMaster, Enabled: true, ServerPort: 11000, MasterServerPort: 27020, AuthenticationPort: 8768},
-			{Name: domain.ShardCaves, Enabled: true, ServerPort: 11001, MasterServerPort: 27021, AuthenticationPort: 8769},
+			{Name: domain.ShardMaster, Enabled: true, ServerPort: 11000, MasterServerPort: 27020, AuthenticationPort: 8768, WorldGenPreset: "SURVIVAL_TOGETHER", WorldGenOverrides: map[string]string{"season_start": "autumn"}},
+			{Name: domain.ShardCaves, Enabled: true, ServerPort: 11001, MasterServerPort: 27021, AuthenticationPort: 8769, WorldGenPreset: "DST_CAVE", WorldGenOverrides: map[string]string{"wormattacks": "never"}},
 		},
 		CreatedAt: time.Date(2026, 4, 24, 10, 0, 0, 0, time.UTC),
 		UpdatedAt: time.Date(2026, 4, 24, 10, 0, 0, 0, time.UTC),
@@ -85,6 +85,22 @@ func TestWriterWritesClusterAndShardConfigFiles(t *testing.T) {
 	if !strings.Contains(cavesINI, "master_server_port = 27021") {
 		t.Fatalf("Caves/server.ini = %q, want master_server_port = 27021", cavesINI)
 	}
+
+	masterWorldGen := readFile(t, filepath.Join(paths.ManagedShardDir(layout, domain.ShardMaster), "worldgenoverride.lua"))
+	if !strings.Contains(masterWorldGen, `preset = "SURVIVAL_TOGETHER"`) {
+		t.Fatalf("Master/worldgenoverride.lua = %q, want SURVIVAL_TOGETHER preset", masterWorldGen)
+	}
+	if !strings.Contains(masterWorldGen, `season_start = "autumn"`) {
+		t.Fatalf("Master/worldgenoverride.lua = %q, want season_start override", masterWorldGen)
+	}
+
+	cavesWorldGen := readFile(t, filepath.Join(paths.ManagedShardDir(layout, domain.ShardCaves), "worldgenoverride.lua"))
+	if !strings.Contains(cavesWorldGen, `preset = "DST_CAVE"`) {
+		t.Fatalf("Caves/worldgenoverride.lua = %q, want DST_CAVE preset", cavesWorldGen)
+	}
+	if !strings.Contains(cavesWorldGen, `wormattacks = "never"`) {
+		t.Fatalf("Caves/worldgenoverride.lua = %q, want wormattacks override", cavesWorldGen)
+	}
 }
 
 func TestWriterRemovesDisabledShardServerINI(t *testing.T) {
@@ -99,8 +115,8 @@ func TestWriterRemovesDisabledShardServerINI(t *testing.T) {
 		PauseWhenEmpty:   true,
 		TickRate:         15,
 		Shards: []domain.ShardConfig{
-			{Name: domain.ShardMaster, Enabled: true, ServerPort: 10999, MasterServerPort: 27016, AuthenticationPort: 8766},
-			{Name: domain.ShardCaves, Enabled: true, ServerPort: 11000, MasterServerPort: 27017, AuthenticationPort: 8767},
+			{Name: domain.ShardMaster, Enabled: true, ServerPort: 10999, MasterServerPort: 27016, AuthenticationPort: 8766, WorldGenPreset: "SURVIVAL_TOGETHER", WorldGenOverrides: map[string]string{}},
+			{Name: domain.ShardCaves, Enabled: true, ServerPort: 11000, MasterServerPort: 27017, AuthenticationPort: 8767, WorldGenPreset: "DST_CAVE", WorldGenOverrides: map[string]string{}},
 		},
 		CreatedAt: time.Date(2026, 4, 24, 10, 0, 0, 0, time.UTC),
 		UpdatedAt: time.Date(2026, 4, 24, 10, 0, 0, 0, time.UTC),
@@ -122,6 +138,9 @@ func TestWriterRemovesDisabledShardServerINI(t *testing.T) {
 
 	if _, err := os.Stat(filepath.Join(paths.ManagedShardDir(layout, domain.ShardCaves), "server.ini")); !os.IsNotExist(err) {
 		t.Fatalf("Caves/server.ini stat error = %v, want not exist", err)
+	}
+	if _, err := os.Stat(filepath.Join(paths.ManagedShardDir(layout, domain.ShardCaves), "worldgenoverride.lua")); !os.IsNotExist(err) {
+		t.Fatalf("Caves/worldgenoverride.lua stat error = %v, want not exist", err)
 	}
 }
 

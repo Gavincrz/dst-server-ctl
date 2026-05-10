@@ -27,8 +27,24 @@ function sampleConfig(): ClusterConfig {
     masterPort: 10888,
     clusterKey: 'dst-server-ctl',
     shards: [
-      { name: 'Master', enabled: true, serverPort: 10999, masterServerPort: 27016, authenticationPort: 8766 },
-      { name: 'Caves', enabled: true, serverPort: 11000, masterServerPort: 27017, authenticationPort: 8767 }
+      {
+        name: 'Master',
+        enabled: true,
+        serverPort: 10999,
+        masterServerPort: 27016,
+        authenticationPort: 8766,
+        worldGenPreset: 'SURVIVAL_TOGETHER',
+        worldGenOverrides: [{ key: 'season_start', value: 'autumn' }]
+      },
+      {
+        name: 'Caves',
+        enabled: true,
+        serverPort: 11000,
+        masterServerPort: 27017,
+        authenticationPort: 8767,
+        worldGenPreset: 'DST_CAVE',
+        worldGenOverrides: []
+      }
     ],
     createdAt: '2026-04-24T01:00:00Z',
     updatedAt: '2026-04-24T02:00:00Z'
@@ -44,6 +60,7 @@ describe('clusterForm helpers', () => {
     expect(form.tickRate).toBe('15');
     expect(form.masterEnabled).toBe(true);
     expect(form.cavesEnabled).toBe(true);
+    expect(form.masterWorldGenOverrides).toBe('season_start=autumn');
     expect(clusterFormIsDirty(form, config)).toBe(false);
   });
 
@@ -70,9 +87,13 @@ describe('clusterForm helpers', () => {
       masterServerPort: ' 11000 ',
       masterMasterServerPort: ' 27020 ',
       masterAuthenticationPort: ' 8768 ',
+      masterWorldGenPreset: 'SURVIVAL_TOGETHER_CLASSIC',
+      masterWorldGenOverrides: 'season_start=autumn\nworld_size=huge',
       cavesServerPort: ' 11001 ',
       cavesMasterServerPort: ' 27021 ',
-      cavesAuthenticationPort: ' 8769 '
+      cavesAuthenticationPort: ' 8769 ',
+      cavesWorldGenPreset: 'DST_CAVE_PLUS',
+      cavesWorldGenOverrides: 'wormattacks=never'
     };
 
     expect(clusterRequestFromForm(form)).toEqual({
@@ -93,8 +114,27 @@ describe('clusterForm helpers', () => {
       masterPort: 12000,
       clusterKey: 'cluster-abc',
       shards: [
-        { name: 'Master', enabled: true, serverPort: 11000, masterServerPort: 27020, authenticationPort: 8768 },
-        { name: 'Caves', enabled: false, serverPort: 11001, masterServerPort: 27021, authenticationPort: 8769 }
+        {
+          name: 'Master',
+          enabled: true,
+          serverPort: 11000,
+          masterServerPort: 27020,
+          authenticationPort: 8768,
+          worldGenPreset: 'SURVIVAL_TOGETHER_CLASSIC',
+          worldGenOverrides: [
+            { key: 'season_start', value: 'autumn' },
+            { key: 'world_size', value: 'huge' }
+          ]
+        },
+        {
+          name: 'Caves',
+          enabled: false,
+          serverPort: 11001,
+          masterServerPort: 27021,
+          authenticationPort: 8769,
+          worldGenPreset: 'DST_CAVE_PLUS',
+          worldGenOverrides: [{ key: 'wormattacks', value: 'never' }]
+        }
       ]
     });
   });

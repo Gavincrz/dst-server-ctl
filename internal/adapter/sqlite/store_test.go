@@ -235,8 +235,8 @@ func TestClusterConfigRepositoryRoundTripsConfig(t *testing.T) {
 		MasterPort:         12000,
 		ClusterKey:         "cluster-abc",
 		Shards: []domain.ShardConfig{
-			{Name: domain.ShardMaster, Enabled: true, ServerPort: 11000, MasterServerPort: 27020, AuthenticationPort: 8768},
-			{Name: domain.ShardCaves, Enabled: false, ServerPort: 11001, MasterServerPort: 27021, AuthenticationPort: 8769},
+			{Name: domain.ShardMaster, Enabled: true, ServerPort: 11000, MasterServerPort: 27020, AuthenticationPort: 8768, WorldGenPreset: "SURVIVAL_TOGETHER", WorldGenOverrides: map[string]string{"season_start": "autumn"}},
+			{Name: domain.ShardCaves, Enabled: false, ServerPort: 11001, MasterServerPort: 27021, AuthenticationPort: 8769, WorldGenPreset: "DST_CAVE", WorldGenOverrides: map[string]string{"wormattacks": "never"}},
 		},
 		CreatedAt: time.Date(2026, 4, 24, 9, 0, 0, 0, time.UTC),
 		UpdatedAt: time.Date(2026, 4, 24, 10, 0, 0, 0, time.UTC),
@@ -271,6 +271,9 @@ func TestClusterConfigRepositoryRoundTripsConfig(t *testing.T) {
 	}
 	if got.Shards[0].ServerPort != 11000 || got.Shards[1].AuthenticationPort != 8769 {
 		t.Fatalf("shards = %#v, want persisted shard port fields", got.Shards)
+	}
+	if got.Shards[0].WorldGenOverrides["season_start"] != "autumn" || got.Shards[1].WorldGenPreset != "DST_CAVE" {
+		t.Fatalf("shards = %#v, want persisted worldgen fields", got.Shards)
 	}
 }
 

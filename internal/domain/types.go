@@ -140,6 +140,8 @@ type ShardConfig struct {
 	ServerPort         int
 	MasterServerPort   int
 	AuthenticationPort int
+	WorldGenPreset     string
+	WorldGenOverrides  map[string]string
 }
 
 type TaskID string

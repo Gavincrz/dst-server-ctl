@@ -104,8 +104,8 @@ func defaultClusterConfig(now time.Time) domain.ClusterConfig {
 		MasterPort:         10888,
 		ClusterKey:         "dst-server-ctl",
 		Shards: []domain.ShardConfig{
-			{Name: domain.ShardMaster, Enabled: true, ServerPort: 10999, MasterServerPort: 27016, AuthenticationPort: 8766},
-			{Name: domain.ShardCaves, Enabled: true, ServerPort: 11000, MasterServerPort: 27017, AuthenticationPort: 8767},
+			{Name: domain.ShardMaster, Enabled: true, ServerPort: 10999, MasterServerPort: 27016, AuthenticationPort: 8766, WorldGenPreset: "SURVIVAL_TOGETHER", WorldGenOverrides: map[string]string{}},
+			{Name: domain.ShardCaves, Enabled: true, ServerPort: 11000, MasterServerPort: 27017, AuthenticationPort: 8767, WorldGenPreset: "DST_CAVE", WorldGenOverrides: map[string]string{}},
 		},
 		CreatedAt: now,
 		UpdatedAt: now,
@@ -167,6 +167,22 @@ func normalizeClusterConfig(config domain.ClusterConfig) (domain.ClusterConfig, 
 		if shard.AuthenticationPort < 1 || shard.AuthenticationPort > 65535 {
 			return domain.ClusterConfig{}, fmt.Errorf("%w: %s authentication port must be between 1 and 65535", domain.ErrInvalidClusterConfig, shard.Name)
 		}
+		shard.WorldGenPreset = strings.TrimSpace(shard.WorldGenPreset)
+		if shard.WorldGenPreset == "" {
+			return domain.ClusterConfig{}, fmt.Errorf("%w: %s world preset is required", domain.ErrInvalidClusterConfig, shard.Name)
+		}
+		normalizedOverrides := make(map[string]string, len(shard.WorldGenOverrides))
+		for key, value := range shard.WorldGenOverrides {
+			trimmedKey := strings.TrimSpace(key)
+			trimmedValue := strings.TrimSpace(value)
+			if trimmedKey == "" {
+				return domain.ClusterConfig{}, fmt.Errorf("%w: %s world override key is required", domain.ErrInvalidClusterConfig, shard.Name)
+			}
+			if trimmedValue == "" {
+				return domain.ClusterConfig{}, fmt.Errorf("%w: %s world override %q value is required", domain.ErrInvalidClusterConfig, shard.Name, trimmedKey)
+			}
+			normalizedOverrides[trimmedKey] = trimmedValue
+		}
 		if other, ok := usedServerPorts[shard.ServerPort]; ok {
 			return domain.ClusterConfig{}, fmt.Errorf("%w: %s server port conflicts with %s", domain.ErrInvalidClusterConfig, shard.Name, other)
 		}
@@ -188,6 +204,8 @@ func normalizeClusterConfig(config domain.ClusterConfig) (domain.ClusterConfig, 
 			ServerPort:         shard.ServerPort,
 			MasterServerPort:   shard.MasterServerPort,
 			AuthenticationPort: shard.AuthenticationPort,
+			WorldGenPreset:     shard.WorldGenPreset,
+			WorldGenOverrides:  normalizedOverrides,
 		})
 	}
 	if _, ok := seen[domain.ShardMaster]; !ok {

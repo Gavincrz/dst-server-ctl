@@ -121,6 +121,22 @@ SET
 	master_server_port = CASE name WHEN 'Master' THEN 27016 WHEN 'Caves' THEN 27017 ELSE master_server_port END,
 	authentication_port = CASE name WHEN 'Master' THEN 8766 WHEN 'Caves' THEN 8767 ELSE authentication_port END;`,
 	},
+	{
+		Version: 7,
+		Name:    "add_worldgen_config",
+		SQL: `
+ALTER TABLE cluster_shards ADD COLUMN worldgen_preset TEXT NOT NULL DEFAULT 'SURVIVAL_TOGETHER';
+
+UPDATE cluster_shards
+SET worldgen_preset = CASE name WHEN 'Master' THEN 'SURVIVAL_TOGETHER' WHEN 'Caves' THEN 'DST_CAVE' ELSE worldgen_preset END;
+
+CREATE TABLE cluster_shard_world_overrides (
+	shard_name TEXT NOT NULL,
+	override_key TEXT NOT NULL,
+	override_value TEXT NOT NULL,
+	PRIMARY KEY (shard_name, override_key)
+);`,
+	},
 }
 
 func Migrate(ctx context.Context, db *sql.DB) error {

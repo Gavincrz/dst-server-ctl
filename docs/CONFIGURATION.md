@@ -4,11 +4,18 @@
 
 把 DST 服务器配置拆成稳定层次，避免继续把“少量已实现字段”误当成最终模型。
 
-当前控制器只覆盖了少量基础 cluster 字段：
+当前控制器已经覆盖：
 
-- `cluster.ini`：`game_mode`、`max_players`、`pvp`、`pause_when_empty`、`cluster_name`、`cluster_description`、`cluster_language`
-- `server.ini`：只写了最小 shard 联机骨架，未暴露端口和 steam 端口
-- 未覆盖：`cluster_token.txt`、密码、admin/allow/block 列表、世界配置、模组配置
+- `cluster.ini`：基础 gameplay/network/misc/shard 字段
+- `server.ini`：每 shard 的 game/steam/auth 端口和主从联机骨架
+- `worldgenoverride.lua`：每 shard 的 preset + overrides 主源
+
+当前仍未覆盖：
+
+- `cluster_token.txt`
+- admin/allow/block 列表
+- `leveldataoverride.lua` 兼容导出
+- 模组配置
 
 ## 文件边界
 

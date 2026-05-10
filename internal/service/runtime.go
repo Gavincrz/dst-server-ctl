@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"sync"
 	"time"
@@ -286,7 +287,13 @@ func clusterConfigsEqual(a, b *domain.ClusterConfig) bool {
 		return false
 	}
 	for i := range a.Shards {
-		if a.Shards[i] != b.Shards[i] {
+		if a.Shards[i].Name != b.Shards[i].Name ||
+			a.Shards[i].Enabled != b.Shards[i].Enabled ||
+			a.Shards[i].ServerPort != b.Shards[i].ServerPort ||
+			a.Shards[i].MasterServerPort != b.Shards[i].MasterServerPort ||
+			a.Shards[i].AuthenticationPort != b.Shards[i].AuthenticationPort ||
+			a.Shards[i].WorldGenPreset != b.Shards[i].WorldGenPreset ||
+			!maps.Equal(a.Shards[i].WorldGenOverrides, b.Shards[i].WorldGenOverrides) {
 			return false
 		}
 	}
@@ -296,6 +303,9 @@ func clusterConfigsEqual(a, b *domain.ClusterConfig) bool {
 func cloneClusterConfig(config domain.ClusterConfig) *domain.ClusterConfig {
 	cloned := config
 	cloned.Shards = append([]domain.ShardConfig(nil), config.Shards...)
+	for i := range cloned.Shards {
+		cloned.Shards[i].WorldGenOverrides = maps.Clone(config.Shards[i].WorldGenOverrides)
+	}
 	return &cloned
 }
 

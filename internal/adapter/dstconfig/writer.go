@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"dst-server-ctl/internal/adapter/paths"
@@ -37,10 +38,14 @@ func (w *Writer) WriteClusterFiles(_ context.Context, config domain.ClusterConfi
 		enabled := shardEnabled(config.Shards, shardName)
 		shardDir := paths.ManagedShardDir(w.layout, shardName)
 		serverPath := filepath.Join(shardDir, "server.ini")
+		worldgenPath := filepath.Join(shardDir, "worldgenoverride.lua")
 
 		if !enabled {
 			if err := os.Remove(serverPath); err != nil && !os.IsNotExist(err) {
 				return fmt.Errorf("remove %s server.ini: %w", shardName, err)
+			}
+			if err := os.Remove(worldgenPath); err != nil && !os.IsNotExist(err) {
+				return fmt.Errorf("remove %s worldgenoverride.lua: %w", shardName, err)
 			}
 			continue
 		}
@@ -50,6 +55,9 @@ func (w *Writer) WriteClusterFiles(_ context.Context, config domain.ClusterConfi
 		}
 		if err := os.WriteFile(serverPath, []byte(renderServerINI(config, shardName)), 0o600); err != nil {
 			return fmt.Errorf("write %s server.ini: %w", shardName, err)
+		}
+		if err := os.WriteFile(worldgenPath, []byte(renderWorldGenOverride(config, shardName)), 0o600); err != nil {
+			return fmt.Errorf("write %s worldgenoverride.lua: %w", shardName, err)
 		}
 	}
 
@@ -117,6 +125,32 @@ func renderServerINI(config domain.ClusterConfig, shardName domain.ShardName) st
 		}
 	}
 
+	return builder.String()
+}
+
+func renderWorldGenOverride(config domain.ClusterConfig, shardName domain.ShardName) string {
+	shard, ok := findShard(config.Shards, shardName)
+	if !ok {
+		return ""
+	}
+
+	var builder strings.Builder
+	builder.WriteString("return {\n")
+	builder.WriteString("\toverride_enabled = true,\n")
+	builder.WriteString(fmt.Sprintf("\tpreset = %q,\n", shard.WorldGenPreset))
+	builder.WriteString("\toverrides = {\n")
+
+	keys := make([]string, 0, len(shard.WorldGenOverrides))
+	for key := range shard.WorldGenOverrides {
+		keys = append(keys, key)
+	}
+	slices.Sort(keys)
+	for _, key := range keys {
+		builder.WriteString(fmt.Sprintf("\t\t%s = %q,\n", key, shard.WorldGenOverrides[key]))
+	}
+
+	builder.WriteString("\t},\n")
+	builder.WriteString("}\n")
 	return builder.String()
 }
 

@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"reflect"
+	"slices"
 	"time"
 
 	"dst-server-ctl/internal/domain"
@@ -867,11 +868,18 @@ type clusterResponse struct {
 }
 
 type shardResponse struct {
-	Name               string `json:"name"`
-	Enabled            bool   `json:"enabled"`
-	ServerPort         int    `json:"serverPort"`
-	MasterServerPort   int    `json:"masterServerPort"`
-	AuthenticationPort int    `json:"authenticationPort"`
+	Name               string                  `json:"name"`
+	Enabled            bool                    `json:"enabled"`
+	ServerPort         int                     `json:"serverPort"`
+	MasterServerPort   int                     `json:"masterServerPort"`
+	AuthenticationPort int                     `json:"authenticationPort"`
+	WorldGenPreset     string                  `json:"worldGenPreset"`
+	WorldGenOverrides  []worldOverrideResponse `json:"worldGenOverrides"`
+}
+
+type worldOverrideResponse struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
 }
 
 type runtimeResponse struct {
@@ -941,11 +949,18 @@ type updateStartRequest struct {
 }
 
 type shardConfig struct {
-	Name               string `json:"name"`
-	Enabled            bool   `json:"enabled"`
-	ServerPort         int    `json:"serverPort"`
-	MasterServerPort   int    `json:"masterServerPort"`
-	AuthenticationPort int    `json:"authenticationPort"`
+	Name               string                 `json:"name"`
+	Enabled            bool                   `json:"enabled"`
+	ServerPort         int                    `json:"serverPort"`
+	MasterServerPort   int                    `json:"masterServerPort"`
+	AuthenticationPort int                    `json:"authenticationPort"`
+	WorldGenPreset     string                 `json:"worldGenPreset"`
+	WorldGenOverrides  []worldOverrideRequest `json:"worldGenOverrides"`
+}
+
+type worldOverrideRequest struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
 }
 
 func installationResponseFromDomain(state domain.InstallationState) installationResponse {
@@ -996,12 +1011,23 @@ func updateResponseFromDomain(state domain.UpdateState) updateResponse {
 func clusterResponseFromDomain(config domain.ClusterConfig) clusterResponse {
 	shards := make([]shardResponse, 0, len(config.Shards))
 	for _, shard := range config.Shards {
+		overrides := make([]worldOverrideResponse, 0, len(shard.WorldGenOverrides))
+		keys := make([]string, 0, len(shard.WorldGenOverrides))
+		for key := range shard.WorldGenOverrides {
+			keys = append(keys, key)
+		}
+		slices.Sort(keys)
+		for _, key := range keys {
+			overrides = append(overrides, worldOverrideResponse{Key: key, Value: shard.WorldGenOverrides[key]})
+		}
 		shards = append(shards, shardResponse{
 			Name:               string(shard.Name),
 			Enabled:            shard.Enabled,
 			ServerPort:         shard.ServerPort,
 			MasterServerPort:   shard.MasterServerPort,
 			AuthenticationPort: shard.AuthenticationPort,
+			WorldGenPreset:     shard.WorldGenPreset,
+			WorldGenOverrides:  overrides,
 		})
 	}
 
@@ -1063,12 +1089,18 @@ func runtimeHistoryResponseFromDomain(events []domain.RuntimeEvent) []runtimeHis
 func (r updateClusterRequest) toDomain() domain.ClusterConfig {
 	shards := make([]domain.ShardConfig, 0, len(r.Shards))
 	for _, shard := range r.Shards {
+		overrides := make(map[string]string, len(shard.WorldGenOverrides))
+		for _, override := range shard.WorldGenOverrides {
+			overrides[override.Key] = override.Value
+		}
 		shards = append(shards, domain.ShardConfig{
 			Name:               domain.ShardName(shard.Name),
 			Enabled:            shard.Enabled,
 			ServerPort:         shard.ServerPort,
 			MasterServerPort:   shard.MasterServerPort,
 			AuthenticationPort: shard.AuthenticationPort,
+			WorldGenPreset:     shard.WorldGenPreset,
+			WorldGenOverrides:  overrides,
 		})
 	}
 

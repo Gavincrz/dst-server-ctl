@@ -2025,6 +2025,19 @@
                   <span>Steam Auth Port</span>
                   <input bind:value={clusterForm.masterAuthenticationPort} disabled={clusterSubmitting} inputmode="numeric" />
                 </div>
+                <div class="field field-wide">
+                  <span>World Preset</span>
+                  <select bind:value={clusterForm.masterWorldGenPreset} disabled={clusterSubmitting}>
+                    <option value="SURVIVAL_TOGETHER">Survival Together</option>
+                    <option value="SURVIVAL_TOGETHER_CLASSIC">Survival Together Classic</option>
+                    <option value="SURVIVAL_DEFAULT_PLUS">Survival Default Plus</option>
+                    <option value="COMPLETE_DARKNESS">Complete Darkness</option>
+                  </select>
+                </div>
+                <label class="field field-wide">
+                  <span>World Overrides</span>
+                  <textarea bind:value={clusterForm.masterWorldGenOverrides} disabled={clusterSubmitting} rows="5" placeholder="season_start=autumn&#10;world_size=huge"></textarea>
+                </label>
               </label>
 
               <label class="shard-card">
@@ -2048,6 +2061,17 @@
                   <span>Steam Auth Port</span>
                   <input bind:value={clusterForm.cavesAuthenticationPort} disabled={clusterSubmitting} inputmode="numeric" />
                 </div>
+                <div class="field field-wide">
+                  <span>World Preset</span>
+                  <select bind:value={clusterForm.cavesWorldGenPreset} disabled={clusterSubmitting}>
+                    <option value="DST_CAVE">DST Cave</option>
+                    <option value="DST_CAVE_PLUS">DST Cave Plus</option>
+                  </select>
+                </div>
+                <label class="field field-wide">
+                  <span>World Overrides</span>
+                  <textarea bind:value={clusterForm.cavesWorldGenOverrides} disabled={clusterSubmitting} rows="5" placeholder="wormattacks=never"></textarea>
+                </label>
               </label>
             </div>
           </div>

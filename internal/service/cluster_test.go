@@ -46,7 +46,7 @@ func TestClusterConfigServiceInitializeReturnsExistingConfig(t *testing.T) {
 		Language:         "en",
 		TickRate:         15,
 		Shards: []domain.ShardConfig{
-			{Name: domain.ShardMaster, Enabled: true, ServerPort: 10999, MasterServerPort: 27016, AuthenticationPort: 8766},
+			{Name: domain.ShardMaster, Enabled: true, ServerPort: 10999, MasterServerPort: 27016, AuthenticationPort: 8766, WorldGenPreset: "SURVIVAL_TOGETHER", WorldGenOverrides: map[string]string{}},
 		},
 		CreatedAt: time.Date(2026, 4, 24, 8, 0, 0, 0, time.UTC),
 		UpdatedAt: time.Date(2026, 4, 24, 8, 0, 0, 0, time.UTC),
@@ -79,8 +79,8 @@ func TestClusterConfigServiceUpdateNormalizesAndPersists(t *testing.T) {
 			Language:         "en",
 			TickRate:         15,
 			Shards: []domain.ShardConfig{
-				{Name: domain.ShardMaster, Enabled: true, ServerPort: 10999, MasterServerPort: 27016, AuthenticationPort: 8766},
-				{Name: domain.ShardCaves, Enabled: true, ServerPort: 11000, MasterServerPort: 27017, AuthenticationPort: 8767},
+				{Name: domain.ShardMaster, Enabled: true, ServerPort: 10999, MasterServerPort: 27016, AuthenticationPort: 8766, WorldGenPreset: "SURVIVAL_TOGETHER", WorldGenOverrides: map[string]string{}},
+				{Name: domain.ShardCaves, Enabled: true, ServerPort: 11000, MasterServerPort: 27017, AuthenticationPort: 8767, WorldGenPreset: "DST_CAVE", WorldGenOverrides: map[string]string{}},
 			},
 			CreatedAt: createdAt,
 			UpdatedAt: createdAt,
@@ -109,8 +109,8 @@ func TestClusterConfigServiceUpdateNormalizesAndPersists(t *testing.T) {
 		MasterPort:         12000,
 		ClusterKey:         " cluster-1 ",
 		Shards: []domain.ShardConfig{
-			{Name: domain.ShardCaves, Enabled: false, ServerPort: 11001, MasterServerPort: 27018, AuthenticationPort: 8768},
-			{Name: domain.ShardMaster, Enabled: true, ServerPort: 11000, MasterServerPort: 27017, AuthenticationPort: 8767},
+			{Name: domain.ShardCaves, Enabled: false, ServerPort: 11001, MasterServerPort: 27018, AuthenticationPort: 8768, WorldGenPreset: "DST_CAVE_PLUS", WorldGenOverrides: map[string]string{"wormattacks": "never"}},
+			{Name: domain.ShardMaster, Enabled: true, ServerPort: 11000, MasterServerPort: 27017, AuthenticationPort: 8767, WorldGenPreset: "SURVIVAL_TOGETHER_CLASSIC", WorldGenOverrides: map[string]string{"season_start": "autumn"}},
 		},
 	})
 	if err != nil {
@@ -148,7 +148,7 @@ func TestClusterConfigServiceUpdateValidatesConfig(t *testing.T) {
 			Language:         "en",
 			TickRate:         15,
 			Shards: []domain.ShardConfig{
-				{Name: domain.ShardMaster, Enabled: true, ServerPort: 10999, MasterServerPort: 27016, AuthenticationPort: 8766},
+				{Name: domain.ShardMaster, Enabled: true, ServerPort: 10999, MasterServerPort: 27016, AuthenticationPort: 8766, WorldGenPreset: "SURVIVAL_TOGETHER", WorldGenOverrides: map[string]string{}},
 			},
 			CreatedAt: time.Date(2026, 4, 24, 8, 0, 0, 0, time.UTC),
 			UpdatedAt: time.Date(2026, 4, 24, 8, 0, 0, 0, time.UTC),
@@ -164,7 +164,7 @@ func TestClusterConfigServiceUpdateValidatesConfig(t *testing.T) {
 		Language:         "en",
 		TickRate:         15,
 		Shards: []domain.ShardConfig{
-			{Name: domain.ShardMaster, Enabled: true, ServerPort: 10999, MasterServerPort: 27016, AuthenticationPort: 8766},
+			{Name: domain.ShardMaster, Enabled: true, ServerPort: 10999, MasterServerPort: 27016, AuthenticationPort: 8766, WorldGenPreset: "SURVIVAL_TOGETHER", WorldGenOverrides: map[string]string{}},
 		},
 	})
 	if err == nil {
