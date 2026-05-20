@@ -3,61 +3,189 @@
 规则：
 
 - 每次只处理一个任务。
+- 任意时刻只能有一个任务是 `doing`。
 - 如果当前任务跨度过大，先拆成更小的可交付任务，再开始其中一个。
 
 ## 当前状态
 
-- [x] 初始化 git 仓库。
-- [x] 添加 harness 文档。
-- [x] 添加 Go 后端骨架。
-- [x] 添加 Svelte 前端骨架。
-- [x] 添加路径布局和 command runner 的基础测试。
-- [x] 配置本机 Go 工具链，并验证后端测试。
-- [x] 添加 SQLite migration 层和安装状态仓储接口。
-- [x] 定义安装状态 API 和 managed root 初始化流程。
-- [x] 实现 SteamCMD 安装计划和任务模型。
-- [x] 添加第一个 Svelte 状态页，并接入后端 `/api/v1/status` 和 `/api/v1/installation`。
-- [x] 添加安装任务 API，并把任务模型接入 SteamCMD 安装执行流程。
-- [x] 在 Svelte 状态页显示安装任务列表和安装操作入口。
-- [x] 为安装任务状态增加前端轮询和错误展示细节。
-- [x] 定义受管 cluster 的基础结构化配置状态和读写 API。
-- [x] 为 cluster 配置生成基础 `cluster.ini` 和 shard `server.ini` 输出。
-- [x] 把 cluster 配置 API 接入 Web UI 表单和保存流程。
-- [x] 为受管 DST 启动流程接入生成后的 cluster 配置目录和 shard 布局。
-- [x] 在启动流程接通后补充运行态状态页和基础进程控制入口。
-- [x] 为 Master 和 Caves 补充日志流读取与展示。
-- [x] 为运行中进程补充退出状态跟踪、自动清理和更细的错误呈现。
-- [x] 在运行态稳定后补充重启入口，并区分配置变更是否需要重启。
-- [x] 持久化更细的运行历史，并为意外退出补重试/告警策略。
-- [x] 修复安装任务轮询期间的 SQLite 并发锁问题，并按真实 DST Linux 64 位产物修正 shard 启动二进制路径。
-- [x] 为安装任务补充 Web UI 日志查看入口，和更新流程的排查体验保持一致。
-- [x] 为安装任务和更新任务的日志展开态增加自动刷新，减少排查时手动点击 Refresh Logs。
-- [x] 为任务日志自动刷新补充活跃任务过滤，避免已结束任务面板持续重复请求。
-- [x] 为安装任务、更新任务和版本检查日志面板统一抽象刷新逻辑，减少前端重复状态和请求代码。
-- [x] 把 runtime shard 日志面板也并入统一的前端日志面板抽象，减少日志 UI 的分散实现。
-- [x] 为 runtime shard 日志增加基于 SSE 的持续推流接口，并让前端日志面板在展开时改用 EventSource 订阅增量输出。
-- [x] 把安装任务、更新任务和版本检查日志也迁移到 SSE，并为不支持 EventSource 的场景保留轮询回退。
-- [x] 为日志 SSE 补充前端交互测试和断线/回退场景覆盖，防止后续重构破坏连接管理。
-- [x] 把日志 SSE 的服务端读取改成基于文件 offset 的增量读取，避免连接期间每秒重读整段最近日志窗口。
-- [x] 把前端普通状态轮询改成分级调度：安装/更新活跃时保持 3 秒，只有运行态时降到更低频率，空闲时不轮询。
-- [x] 评估日志 SSE 是否需要继续升级为 file watcher 驱动 tail，并记录“暂不实现、保留低频 poll fallback”的结论和触发条件。
-- [x] 为安装/更新任务列表、运行态总览和版本检查状态补充 dashboard 汇总 SSE，减少前端普通状态接口的定时刷新。
-- [x] 评估 dashboard 是否继续承载 cluster 保存结果、运行历史和控制操作回执，并记录“只继续事件化真实后端状态，不把临时 UI 回执并入状态流”的结论。
-- [x] 梳理 DST 服务器配置的完整分层和来源，明确 `cluster.ini`、`server.ini`、世界配置文件、附属列表文件和模组配置的边界，并把结论记录到 `docs/CONFIGURATION.md`。
-- [x] 扩展 cluster/shared 与 shard/network 的结构化状态，补齐 `cluster.ini`、`server.ini` 的主要参数边界，并接入 API、SQLite、writer 和 Web UI。
-- [x] 把世界配置主源定为 `worldgenoverride.lua`，并先实现每 shard 的 preset + overrides 结构、持久化和文件生成链路。
+项目当前已经具备：
 
-当前项目已有 harness、工程骨架、managed root 路径布局、共享 command runner、SQLite 状态存储基础层、启动时 managed root 初始化、安装状态 API、安装任务 API、任务模型、由任务驱动的 SteamCMD/DST 安装执行流程、初始化状态页、可反映控制器启动时间的基础运行状态、受管 cluster 的结构化配置状态和 `GET/PUT /api/v1/cluster` 读写 API、由该状态生成的 `cluster.ini`、`server.ini` 与 `worldgenoverride.lua` 基础输出、扩展后的 cluster/shared 与 shard/network 结构化参数（包括 cluster intention、offline/lan、tick rate、console、bind/master port、cluster key，以及每 shard 的 game/steam/auth 端口）、每 shard 的 world preset + overrides 结构化状态和持久化、接入 Web UI 的 cluster 配置表单/保存/重置和前端测试、基于 managed root `clusters/primary` 布局的 DST shard 启动命令生成与运行时启动 service、`GET /api/v1/runtime`、`POST /api/v1/runtime/start`、`POST /api/v1/runtime/stop`、`POST /api/v1/runtime/restart` 与对应的运行态 Web 控制面板、写入 `logs/master.log`/`logs/caves.log` 的 shard 日志落盘、最近日志读取 API 和日志展示面板、shard 异常退出后的自动状态清理与错误回传、基于启动时配置快照的 `restartRequired` 判定、持久化到 SQLite 的 runtime history 与一次自动重试策略，以及带有本地/远端版本比较、手动检查、手动更新、启动后定时检查、运行中更新保护、停服确认、更新任务日志读取/失败排查入口、安装任务日志查看入口、安装/更新任务展开日志自动刷新、活跃任务过滤、统一日志面板刷新抽象、runtime shard 日志面板统一展开/刷新交互、runtime/安装/更新/版本检查日志 SSE 持续推流、基于文件 offset 的服务端增量日志读取、dashboard 汇总 SSE、前端普通状态轮询分级降频、前端 SSE 连接/断线/回退测试和版本检查日志落盘/排查入口的 DST 更新流程。
+- harness、Go 后端骨架、Svelte 前端骨架和基础工程流程。
+- managed root 路径布局、共享 command runner、SQLite 状态存储基础层和启动时 managed root 初始化。
+- 安装状态 API、安装任务 API、任务模型，以及由任务驱动的 SteamCMD / DST 安装执行流程。
+- 初始化状态页、运行态状态页、运行控制入口，以及安装/更新任务和 shard 日志查看能力。
+- 受管 cluster 的结构化配置状态、`GET/PUT /api/v1/cluster` 读写 API，以及由该状态生成的 `cluster.ini`、`server.ini` 与 `worldgenoverride.lua`。
+- 扩展后的 cluster/shared 与 shard/network 结构化参数、每 shard 的 world preset + overrides 状态、对应的 Web UI 表单和前端测试。
+- 基于 managed root `clusters/primary` 布局的 DST shard 启动命令生成、运行时启动 service、`/api/v1/runtime` 系列接口和基础运行历史。
+- 安装/更新/版本检查/runtime 日志 SSE、dashboard 汇总 SSE、按 offset 增量读取的日志推流，以及前端断线/回退测试。
+- 带本地/远端版本比较、手动检查、手动更新、运行中更新保护和日志落盘/排查入口的 DST 更新流程。
 
-## 下一任务
+## 任务列表
 
-- [x] 梳理 DST 服务器配置的完整分层和来源，明确 `cluster.ini`、`server.ini`、世界配置文件、附属列表文件和模组配置的边界，并把结论记录到 `docs/CONFIGURATION.md`。
-- [x] 先扩展 cluster/shared 与 shard/network 的结构化状态，补齐 `cluster.ini`、`server.ini` 的主要参数边界，并接入基础 UI。
-- [x] 把世界配置主源定为 `worldgenoverride.lua`，先实现每 shard 的 preset + overrides 结构和生成链路。
-- [ ] 在服务器配置实现上以“最终全量参数可配置”为目标推进；首轮可以先挑少量参数验证链路，但不能把当前少量字段当成最终范围。
-- [ ] 继续补世界配置字段覆盖面；首轮已支持 preset + overrides，但还没有把常用世界参数做成结构化可发现的表单项。
-- [ ] 语言相关先以英语为默认和首个完整支持目标；若找不到 Klei 官方维护的完整语言代码对照表，则记录为待确认项，不阻塞配置主线。
-- [ ] 在实时刷新、dashboard 事件细化和其他体验优化上降级优先级，后续先聚焦服务器配置、世界配置和 mod 管理。
+### T-001 | done | 初始化仓库与基础工程骨架
+
+目标：
+建立 git 仓库、harness 文档、Go 后端骨架和 Svelte 前端骨架。
+
+完成标准：
+- git 仓库已初始化。
+- harness 文档已添加。
+- Go 和 Svelte 工程骨架可用。
+
+下一步：
+补齐路径布局、command runner 与基础测试。
+
+### T-002 | done | 打通基础运行支撑
+
+目标：
+建立 managed root、共享 command runner、SQLite migration 和安装状态存储基础层。
+
+完成标准：
+- managed root 路径布局已落地。
+- command runner 已提供基础测试。
+- SQLite migration 与安装状态仓储接口可用。
+
+下一步：
+定义安装状态 API 和受管安装执行链路。
+
+### T-003 | done | 打通受管安装与初始化 UI
+
+目标：
+让控制器可先启动，再通过 Web UI 驱动受管安装。
+
+完成标准：
+- 安装状态 API、安装任务 API 和任务模型已接通。
+- SteamCMD / DST 安装流程可由后端任务执行。
+- 状态页已接入 `/api/v1/status` 与 `/api/v1/installation`。
+
+下一步：
+补齐安装任务列表、轮询和错误展示细节。
+
+### T-004 | done | 打通 cluster 基础配置链路
+
+目标：
+建立受管 cluster 的结构化配置状态、API、文件生成和基础 UI。
+
+完成标准：
+- `GET/PUT /api/v1/cluster` 可读写结构化配置。
+- `cluster.ini` 和 shard `server.ini` 可从状态生成。
+- Web UI 可编辑、保存和重置基础 cluster 配置。
+
+下一步：
+把生成后的 cluster 目录接入启动流程。
+
+### T-005 | done | 打通运行态控制与日志查看
+
+目标：
+让控制器可启动/停止/重启受管 shard，并提供基础日志与错误反馈。
+
+完成标准：
+- `runtime` 系列 API 和运行态控制面板可用。
+- Master / Caves 日志可落盘并查看。
+- 进程退出状态、自动清理和基础错误展示已接通。
+
+下一步：
+补齐运行历史、自动重试和配置变更后的重启判定。
+
+### T-006 | done | 收敛日志与状态刷新体验
+
+目标：
+减少日志和 dashboard 相关的重复轮询与前端重复实现。
+
+完成标准：
+- 安装/更新/runtime/版本检查日志已统一到共享日志面板抽象。
+- 日志流已迁移到 SSE，并为不支持 EventSource 的场景保留回退。
+- dashboard 汇总 SSE 和分级状态轮询已生效。
+
+下一步：
+评估日志 tail 与 dashboard 事件边界，避免过早增加复杂度。
+
+### T-007 | done | 梳理 DST 配置分层并打通世界配置主链路
+
+目标：
+明确 DST 配置边界，并先打通 `worldgenoverride.lua` 的结构化生成链路。
+
+完成标准：
+- `docs/CONFIGURATION.md` 已记录 cluster、shard、世界和模组配置边界。
+- cluster/shared 与 shard/network 结构化参数已扩展到主要 `cluster.ini` / `server.ini` 范围。
+- 每 shard 的 world preset + overrides 已持久化、生成并接入 Web UI。
+
+下一步：
+继续扩展世界配置字段覆盖面，并保持“最终全量参数可配置”的目标。
+
+### T-008 | done | 规范仓库治理文档护栏
+
+目标：
+把仓库协作规则、任务文档、架构文档和决策文档整理成更稳定的 agent 友好形态。
+
+完成标准：
+- `AGENTS.md` 已补充代码健康和小步重构规则。
+- `docs/TASKS.md` 已改为固定任务模板，并反映完成内容、下一步和阻塞点。
+- `docs/ARCHITECTURE.md` 已补充外部接口与测试切入点。
+- `docs/DECISIONS.md` 已采用稳定的“id + date + 决定 + 原因”格式。
+
+下一步：
+回到服务器配置、世界配置和 mod 管理主线。
+
+### T-009 | doing | 继续扩展服务器配置的全量参数覆盖
+
+目标：
+在服务器配置实现上以“最终全量参数可配置”为目标推进；首轮可以先挑少量参数验证链路，但不能把当前少量字段当成最终范围。
+
+完成标准：
+- 明确 `cluster.ini`、`server.ini` 仍缺失的高价值参数范围。
+- 新增一批结构化字段，并接通 API、存储、writer 和基础 UI。
+- 不把当前已支持字段误当成最终配置面。
+
+实现备注：
+- 优先沿现有结构化配置链路扩展，不要绕回原地编辑 DST 文本文件。
+- 如果发现字段边界不清楚，先补文档或记录未决项，再继续实现。
+
+下一步：
+继续补世界配置字段覆盖面。
+
+### T-010 | todo | 扩展世界配置字段覆盖面
+
+目标：
+在已支持 preset + overrides 的前提下，继续把常用世界参数做成结构化、可发现的表单项。
+
+完成标准：
+- 补齐一批高频世界配置项的结构化状态。
+- 文件生成、持久化和 Web UI 保持一致。
+- 对仍不适合结构化的项保留 overrides 兜底。
+
+实现备注：
+- 继续以 `worldgenoverride.lua` 为主源，不提前切回 `leveldataoverride.lua`。
+
+下一步：
+确认语言配置和 mod 管理与世界配置的衔接边界。
+
+### T-011 | todo | 核实语言配置边界
+
+目标：
+先以英语为默认和首个完整支持目标，并确认语言切换所需的可靠来源。
+
+完成标准：
+- 明确首版是否只提供英语默认值还是允许有限语言切换。
+- 若缺少 Klei 官方维护的完整语言代码对照表，记录为待确认项而不阻塞配置主线。
+
+实现备注：
+- 不为了语言问题打断服务器配置与世界配置主线。
+
+下一步：
+继续规划 mod 管理的接入范围。
+
+### T-012 | todo | 延后低优先级体验优化
+
+目标：
+把实时刷新、dashboard 事件细化和其他体验优化降级优先级，避免分散当前主线。
+
+完成标准：
+- 当前主线优先级明确回到服务器配置、世界配置和 mod 管理。
+- 新的体验优化需求先进入任务列表，不直接挤占主线任务。
+
+下一步：
+在配置主线收敛后再回头挑选高价值体验优化。
 
 ## 暂时不要做
 
@@ -68,8 +196,8 @@
 
 ## 最近完成检查
 
-- [x] 已运行相关后端/前端检查。
-- [x] 本次改过的 Go 文件已运行 `gofmt`。
+- [ ] 已运行相关后端/前端检查。
+- [x] 本次未改 Go 文件，无需运行 `gofmt`。
 - [x] 若边界或技术决策变化，已更新架构或决策文档。
 - [x] 本文件已反映完成内容和下一任务。
 - [ ] 本次改动未提交 commit。
