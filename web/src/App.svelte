@@ -5,8 +5,11 @@
     clusterFormFromConfig,
     clusterFormIsDirty,
     clusterRequestFromForm,
+    cavesWorldSettingFields,
+    masterWorldSettingFields,
     type ClusterConfig,
-    type ClusterFormState
+    type ClusterFormState,
+    worldSettingOptions
   } from './lib/clusterForm';
   import { closeLogStream, connectLogStream, type EventSourceLike } from './lib/logStream';
   import { closeStatusStream, connectStatusStream } from './lib/statusStream';
@@ -2035,8 +2038,24 @@
                   </select>
                 </div>
                 <label class="field field-wide">
-                  <span>World Overrides</span>
-                  <textarea bind:value={clusterForm.masterWorldGenOverrides} disabled={clusterSubmitting} rows="5" placeholder="season_start=autumn&#10;world_size=huge"></textarea>
+                  <span>World Generation And Rules</span>
+                  <div class="toggle-grid">
+                    {#each masterWorldSettingFields as field (field.overrideKey)}
+                      <label class="field">
+                        <span>{field.label}</span>
+                        <select bind:value={clusterForm.masterWorldSettings[field.formKey]} disabled={clusterSubmitting}>
+                          {#each worldSettingOptions(field) as option (option.value)}
+                            <option value={option.value}>{option.label}</option>
+                          {/each}
+                        </select>
+                        <small>{field.description}</small>
+                      </label>
+                    {/each}
+                  </div>
+                </label>
+                <label class="field field-wide">
+                  <span>Extra World Overrides</span>
+                  <textarea bind:value={clusterForm.masterExtraWorldGenOverrides} disabled={clusterSubmitting} rows="5" placeholder="beefalo=often&#10;penguins=never"></textarea>
                 </label>
               </label>
 
@@ -2069,8 +2088,24 @@
                   </select>
                 </div>
                 <label class="field field-wide">
-                  <span>World Overrides</span>
-                  <textarea bind:value={clusterForm.cavesWorldGenOverrides} disabled={clusterSubmitting} rows="5" placeholder="wormattacks=never"></textarea>
+                  <span>World Generation And Rules</span>
+                  <div class="toggle-grid">
+                    {#each cavesWorldSettingFields as field (field.overrideKey)}
+                      <label class="field">
+                        <span>{field.label}</span>
+                        <select bind:value={clusterForm.cavesWorldSettings[field.formKey]} disabled={clusterSubmitting}>
+                          {#each worldSettingOptions(field) as option (option.value)}
+                            <option value={option.value}>{option.label}</option>
+                          {/each}
+                        </select>
+                        <small>{field.description}</small>
+                      </label>
+                    {/each}
+                  </div>
+                </label>
+                <label class="field field-wide">
+                  <span>Extra World Overrides</span>
+                  <textarea bind:value={clusterForm.cavesExtraWorldGenOverrides} disabled={clusterSubmitting} rows="5" placeholder="mushtree=often&#10;bunnymen=rare"></textarea>
                 </label>
               </label>
             </div>

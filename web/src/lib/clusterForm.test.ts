@@ -60,7 +60,8 @@ describe('clusterForm helpers', () => {
     expect(form.tickRate).toBe('15');
     expect(form.masterEnabled).toBe(true);
     expect(form.cavesEnabled).toBe(true);
-    expect(form.masterWorldGenOverrides).toBe('season_start=autumn');
+    expect(form.masterWorldSettings.seasonStart).toBe('autumn');
+    expect(form.masterExtraWorldGenOverrides).toBe('');
     expect(clusterFormIsDirty(form, config)).toBe(false);
   });
 
@@ -88,12 +89,48 @@ describe('clusterForm helpers', () => {
       masterMasterServerPort: ' 27020 ',
       masterAuthenticationPort: ' 8768 ',
       masterWorldGenPreset: 'SURVIVAL_TOGETHER_CLASSIC',
-      masterWorldGenOverrides: 'season_start=autumn\nworld_size=huge',
+      masterWorldSettings: {
+        worldSize: 'huge',
+        branching: 'most',
+        loop: 'always',
+        startLocation: 'plus',
+        seasonStart: 'autumn',
+        day: 'longday',
+        weather: 'often',
+        autumn: 'longseason',
+        winter: 'default',
+        spring: '',
+        summer: '',
+        roads: 'often',
+        touchstone: 'rare',
+        boons: 'always',
+        cavePonds: '',
+        wormAttacks: ''
+      },
+      masterExtraWorldGenOverrides: 'bearger=rare',
       cavesServerPort: ' 11001 ',
       cavesMasterServerPort: ' 27021 ',
       cavesAuthenticationPort: ' 8769 ',
       cavesWorldGenPreset: 'DST_CAVE_PLUS',
-      cavesWorldGenOverrides: 'wormattacks=never'
+      cavesWorldSettings: {
+        worldSize: 'medium',
+        branching: '',
+        loop: 'default',
+        startLocation: 'caves',
+        seasonStart: '',
+        day: '',
+        weather: '',
+        autumn: '',
+        winter: '',
+        spring: '',
+        summer: '',
+        roads: '',
+        touchstone: '',
+        boons: '',
+        cavePonds: 'often',
+        wormAttacks: 'never'
+      },
+      cavesExtraWorldGenOverrides: 'mushtree=often'
     };
 
     expect(clusterRequestFromForm(form)).toEqual({
@@ -122,7 +159,18 @@ describe('clusterForm helpers', () => {
           authenticationPort: 8768,
           worldGenPreset: 'SURVIVAL_TOGETHER_CLASSIC',
           worldGenOverrides: [
+            { key: 'autumn', value: 'longseason' },
+            { key: 'bearger', value: 'rare' },
+            { key: 'boons', value: 'always' },
+            { key: 'branching', value: 'most' },
+            { key: 'day', value: 'longday' },
+            { key: 'loop', value: 'always' },
+            { key: 'roads', value: 'often' },
             { key: 'season_start', value: 'autumn' },
+            { key: 'start_location', value: 'plus' },
+            { key: 'touchstone', value: 'rare' },
+            { key: 'weather', value: 'often' },
+            { key: 'winter', value: 'default' },
             { key: 'world_size', value: 'huge' }
           ]
         },
@@ -133,10 +181,32 @@ describe('clusterForm helpers', () => {
           masterServerPort: 27021,
           authenticationPort: 8769,
           worldGenPreset: 'DST_CAVE_PLUS',
-          worldGenOverrides: [{ key: 'wormattacks', value: 'never' }]
+          worldGenOverrides: [
+            { key: 'cave_ponds', value: 'often' },
+            { key: 'loop', value: 'default' },
+            { key: 'mushtree', value: 'often' },
+            { key: 'start_location', value: 'caves' },
+            { key: 'world_size', value: 'medium' },
+            { key: 'wormattacks', value: 'never' }
+          ]
         }
       ]
     });
+  });
+
+  it('preserves unknown world overrides in the extra overrides textarea', () => {
+    const config = sampleConfig();
+    config.shards[0].worldGenOverrides = [
+      { key: 'season_start', value: 'autumn' },
+      { key: 'world_size', value: 'huge' },
+      { key: 'beefalo', value: 'often' }
+    ];
+
+    const form = clusterFormFromConfig(config);
+
+    expect(form.masterWorldSettings.seasonStart).toBe('autumn');
+    expect(form.masterWorldSettings.worldSize).toBe('huge');
+    expect(form.masterExtraWorldGenOverrides).toBe('beefalo=often');
   });
 
   it('marks the form dirty when editable fields change', () => {

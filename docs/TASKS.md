@@ -19,6 +19,7 @@
 - 基于 managed root `clusters/primary` 布局的 DST shard 启动命令生成、运行时启动 service、`/api/v1/runtime` 系列接口和基础运行历史。
 - 安装/更新/版本检查/runtime 日志 SSE、dashboard 汇总 SSE、按 offset 增量读取的日志推流，以及前端断线/回退测试。
 - 带本地/远端版本比较、手动检查、手动更新、运行中更新保护和日志落盘/排查入口的 DST 更新流程。
+- Master / Caves 世界配置表单已补入一批高频世界生成 / 世界规则字段，并继续保留 raw overrides 兜底。
 
 ## 任务列表
 
@@ -127,7 +128,7 @@
 下一步：
 回到服务器配置、世界配置和 mod 管理主线。
 
-### T-009 | doing | 继续扩展服务器配置的全量参数覆盖
+### T-009 | todo | 继续扩展服务器配置的全量参数覆盖
 
 目标：
 在服务器配置实现上以“最终全量参数可配置”为目标推进；首轮可以先挑少量参数验证链路，但不能把当前少量字段当成最终范围。
@@ -142,9 +143,9 @@
 - 如果发现字段边界不清楚，先补文档或记录未决项，再继续实现。
 
 下一步：
-继续补世界配置字段覆盖面。
+回到 cluster shared secrets/lists 和其余高价值 `cluster.ini` / `server.ini` 参数。
 
-### T-010 | todo | 扩展世界配置字段覆盖面
+### T-010 | doing | 扩展世界配置字段覆盖面
 
 目标：
 在已支持 preset + overrides 的前提下，继续把常用世界参数做成结构化、可发现的表单项。
@@ -156,9 +157,12 @@
 
 实现备注：
 - 继续以 `worldgenoverride.lua` 为主源，不提前切回 `leveldataoverride.lua`。
+- 本轮已把下列字段接成结构化表单，并继续映射回 shard overrides：
+  `world_size`、`branching`、`loop`、`start_location`、`season_start`、`day`、`weather`、`autumn`、`winter`、`spring`、`summer`、`roads`、`touchstone`、`boons`、`cave_ponds`、`wormattacks`
+- 仍保留 “extra world overrides” 文本框，用于透传尚未结构化的世界项。
 
 下一步：
-确认语言配置和 mod 管理与世界配置的衔接边界。
+继续补资源、生物、事件类高频世界项，并评估是否需要把世界字段从通用 overrides map 进一步演进成独立子模型。
 
 ### T-011 | todo | 核实语言配置边界
 
@@ -196,11 +200,11 @@
 
 ## 最近完成检查
 
-- [ ] 已运行相关后端/前端检查。
+- [x] 已运行相关后端/前端检查。
 - [x] 本次未改 Go 文件，无需运行 `gofmt`。
 - [x] 若边界或技术决策变化，已更新架构或决策文档。
 - [x] 本文件已反映完成内容和下一任务。
-- [ ] 本次改动未提交 commit。
+- [x] 本次改动未提交 commit。
 
 ## 未决问题
 
