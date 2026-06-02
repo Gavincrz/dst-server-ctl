@@ -34,14 +34,23 @@ export type WorldSettingsFormState = {
   seasonStart: string;
   day: string;
   weather: string;
+  lightning: string;
+  wildfires: string;
+  petrification: string;
+  hounds: string;
   autumn: string;
   winter: string;
   spring: string;
   summer: string;
+  spawnMode: string;
+  ghostEnabled: string;
+  resetTime: string;
+  krampus: string;
   roads: string;
   touchstone: string;
   boons: string;
   cavePonds: string;
+  earthquakes: string;
   wormAttacks: string;
 };
 
@@ -138,6 +147,32 @@ const seasonLengthOptions: WorldSettingOption[] = [
   { value: 'random', label: 'Random' }
 ];
 
+const petrificationOptions: WorldSettingOption[] = [
+  { value: 'none', label: 'None' },
+  { value: 'few', label: 'Few' },
+  { value: 'default', label: 'Default' },
+  { value: 'many', label: 'Many' },
+  { value: 'max', label: 'Max' }
+];
+
+const spawnModeOptions: WorldSettingOption[] = [
+  { value: 'fixed', label: 'Portal' },
+  { value: 'scatter', label: 'Random' }
+];
+
+const ghostEnabledOptions: WorldSettingOption[] = [
+  { value: 'none', label: 'Respawn' },
+  { value: 'always', label: 'Become Ghost' }
+];
+
+const resetTimeOptions: WorldSettingOption[] = [
+  { value: 'none', label: 'Disabled' },
+  { value: 'slow', label: 'Slow' },
+  { value: 'default', label: 'Default' },
+  { value: 'fast', label: 'Fast' },
+  { value: 'always', label: 'Instant' }
+];
+
 const emptyWorldSettingOption: WorldSettingOption = { value: '', label: 'Preset Default' };
 
 const worldSettingBindings: WorldSettingField[] = [
@@ -228,6 +263,34 @@ const worldSettingBindings: WorldSettingField[] = [
     options: frequencyOptions
   },
   {
+    formKey: 'lightning',
+    overrideKey: 'lightning',
+    label: 'Lightning',
+    description: 'Adjust how often lightning strikes happen on the surface.',
+    options: frequencyOptions
+  },
+  {
+    formKey: 'wildfires',
+    overrideKey: 'wildfires',
+    label: 'Wildfires',
+    description: 'Control wildfire frequency during summer on the surface.',
+    options: frequencyOptions
+  },
+  {
+    formKey: 'petrification',
+    overrideKey: 'petrification',
+    label: 'Petrification',
+    description: 'Tune how aggressively forests petrify into stone trees.',
+    options: petrificationOptions
+  },
+  {
+    formKey: 'hounds',
+    overrideKey: 'hounds',
+    label: 'Hound Attacks',
+    description: 'Adjust roaming hound attack frequency on the surface.',
+    options: frequencyOptions
+  },
+  {
     formKey: 'autumn',
     overrideKey: 'autumn',
     label: 'Autumn Length',
@@ -254,6 +317,34 @@ const worldSettingBindings: WorldSettingField[] = [
     label: 'Summer Length',
     description: 'Override summer duration on the surface shard.',
     options: seasonLengthOptions
+  },
+  {
+    formKey: 'spawnMode',
+    overrideKey: 'spawnmode',
+    label: 'Spawn Mode',
+    description: 'Choose whether survivors respawn at the portal or scatter randomly.',
+    options: spawnModeOptions
+  },
+  {
+    formKey: 'ghostEnabled',
+    overrideKey: 'ghostenabled',
+    label: 'Ghost Mode',
+    description: 'Choose whether dead players become ghosts or respawn directly.',
+    options: ghostEnabledOptions
+  },
+  {
+    formKey: 'resetTime',
+    overrideKey: 'resettime',
+    label: 'World Reset Time',
+    description: 'Control how quickly an empty world resets itself.',
+    options: resetTimeOptions
+  },
+  {
+    formKey: 'krampus',
+    overrideKey: 'krampus',
+    label: 'Krampus',
+    description: 'Adjust how often Krampus spawns when naughty actions stack up.',
+    options: frequencyOptions
   },
   {
     formKey: 'roads',
@@ -284,6 +375,13 @@ const worldSettingBindings: WorldSettingField[] = [
     options: frequencyOptions
   },
   {
+    formKey: 'earthquakes',
+    overrideKey: 'earthquakes',
+    label: 'Earthquakes',
+    description: 'Adjust cave earthquake frequency.',
+    options: frequencyOptions
+  },
+  {
     formKey: 'wormAttacks',
     overrideKey: 'wormattacks',
     label: 'Worm Attacks',
@@ -293,17 +391,27 @@ const worldSettingBindings: WorldSettingField[] = [
 ];
 
 export const masterWorldSettingFields = worldSettingBindings.filter(
-  (field) => field.formKey !== 'cavePonds' && field.formKey !== 'wormAttacks'
+  (field) => field.formKey !== 'cavePonds' &&
+    field.formKey !== 'earthquakes' &&
+    field.formKey !== 'wormAttacks'
 );
 
 export const cavesWorldSettingFields = worldSettingBindings.filter(
   (field) => field.formKey !== 'seasonStart' &&
     field.formKey !== 'day' &&
     field.formKey !== 'weather' &&
+    field.formKey !== 'lightning' &&
+    field.formKey !== 'wildfires' &&
+    field.formKey !== 'petrification' &&
+    field.formKey !== 'hounds' &&
     field.formKey !== 'autumn' &&
     field.formKey !== 'winter' &&
     field.formKey !== 'spring' &&
     field.formKey !== 'summer' &&
+    field.formKey !== 'spawnMode' &&
+    field.formKey !== 'ghostEnabled' &&
+    field.formKey !== 'resetTime' &&
+    field.formKey !== 'krampus' &&
     field.formKey !== 'roads' &&
     field.formKey !== 'touchstone' &&
     field.formKey !== 'boons'
@@ -520,14 +628,23 @@ function emptyWorldSettingsForm(): WorldSettingsFormState {
     seasonStart: '',
     day: '',
     weather: '',
+    lightning: '',
+    wildfires: '',
+    petrification: '',
+    hounds: '',
     autumn: '',
     winter: '',
     spring: '',
     summer: '',
+    spawnMode: '',
+    ghostEnabled: '',
+    resetTime: '',
+    krampus: '',
     roads: '',
     touchstone: '',
     boons: '',
     cavePonds: '',
+    earthquakes: '',
     wormAttacks: ''
   };
 }

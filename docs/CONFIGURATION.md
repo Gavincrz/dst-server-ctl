@@ -17,6 +17,104 @@
 - `leveldataoverride.lua` 兼容导出
 - 模组配置
 
+## 2026-05-27 轻量核对结论
+
+本轮先做“公开资料 + 当前仓库实现”的轻量核对，不在本地额外下载安装最新 DST。目标是先收敛高价值差异，再把“最新安装产物/脚本实物核对”留到后续通过受管安装链路验证。
+
+本轮主要依据：
+
+- Klei 官方论坛 Linux dedicated server quick setup guide，确认 cluster 基础文件布局、`cluster_token.txt`、`cluster.ini` 与 shard `server.ini` 的主链路。
+- Klei 官方论坛 dedicated server 相关讨论，确认 `worldgenoverride.lua` 仍是当前主线运维语境中的世界配置入口，`dedicated_server_mods_setup.lua` 与 shard `modoverrides.lua` 仍是模组文件边界。
+- 当前仓库 `internal/adapter/dstconfig/writer.go`、`internal/service/cluster.go`、`internal/http/router.go` 的实际字段与文件生成逻辑。
+
+当前可先视为“已覆盖且链路完整”的范围：
+
+- `cluster.ini`
+  - `[GAMEPLAY]`：`game_mode`、`max_players`、`pvp`、`pause_when_empty`
+  - `[NETWORK]`：`cluster_name`、`cluster_description`、`cluster_password`、`cluster_intention`、`cluster_language`、`offline_cluster`、`lan_only_cluster`、`tick_rate`
+  - `[MISC]`：`console_enabled`
+  - `[SHARD]`：`shard_enabled`，以及多 shard 时的 `bind_ip`、`master_port`、`cluster_key`
+- `server.ini`
+  - `[NETWORK]`：`server_port`，以及非 Master shard 的 `master_ip`、`master_port`
+  - `[STEAM]`：`master_server_port`、`authentication_port`
+  - `[SHARD]`：多 shard 时的 `is_master`，以及非 Master shard 的 `name`
+- `worldgenoverride.lua`
+  - 每 shard 的 `preset`
+  - 结构化字段 + raw overrides 透传并存
+  - 未结构化键仍可通过 overrides map 落盘
+
+本轮确认仍缺失、且优先级高于继续零散补字段的范围：
+
+- `cluster_token.txt`
+- `adminlist.txt`、`whitelist.txt`、`blocklist.txt`
+- `dedicated_server_mods_setup.lua`
+- `Master/modoverrides.lua`、`Caves/modoverrides.lua`
+- `leveldataoverride.lua` 兼容导出
+
+本轮对 `cluster.ini` / `server.ini` 的结论：
+
+- 以 Klei 官方 quick setup guide 能直接确认的基础参数看，当前控制器已经覆盖主干启动链路所需的大部分核心字段。
+- 但这还不是“最新版本参数面已逐项穷尽核对”的结论。
+- 后续如果要宣称“已按最新 DST 服务端和脚本源码核实”，仍需要在 managed root 下拿最新受管安装产物做二次实物核对。
+
+本轮对世界参数的结论：
+
+- 当前控制器已经把一批高频世界生成/规则字段做成结构化输入，并保留 raw overrides 兜底，这条模型方向是对的。
+- 公开官方资料并没有提供一份稳定、完备、面向服务端维护者的“最新世界参数全集”清单，至少当前仓库里还没有足够可靠的来源可直接固化为最终基线。
+- 因此，资源、生物、事件类字段继续扩展前，最好先基于最新受管安装中的真实脚本或模板做二次核对。
+
+## 2026-06-02 最新受管安装产物实物核对
+
+本轮已经通过 Web 前端完成受管安装与版本检查链路验证，并基于 managed root 下的最新 DST 安装产物做二次实物核对。
+
+本轮主要依据：
+
+- `~/.local/share/dst-server-ctl/dst/data/databundles/scripts.zip`
+- `scripts/map/customize.lua`
+- `scripts/worldsettings_overrides.lua`
+- `scripts/languages/language.lua`
+- 受管生成产物：
+  `clusters/primary/cluster.ini`、
+  `Master/server.ini`、
+  `Caves/server.ini`、
+  `Master/worldgenoverride.lua`、
+  `Caves/worldgenoverride.lua`
+
+本轮确认：
+
+- 当前受管安装链路可用，DST 已成功安装到 managed root。
+- `Check Now` 能正确读到本地与远端 build id，并完成版本比较。
+- 当前生成文件仍与现有结构化模型一致：
+  `cluster.ini`、`server.ini`、`worldgenoverride.lua` 主链路正常。
+- `cluster_token.txt`、admin/allow/block 列表、`dedicated_server_mods_setup.lua`、各 shard `modoverrides.lua`、`leveldataoverride.lua` 兼容导出仍未接入。
+
+本轮对世界配置的新增结论：
+
+- 最新脚本中，世界参数已经明显分成两层：
+  - worldgen 类：`WORLDGEN_GROUP`
+  - runtime/worldsettings 类：`WORLDSETTINGS_GROUP`
+- 当前控制器已结构化的 16 个字段，主要只覆盖了 `global` / `misc` 中一小部分基础项：
+  `world_size`、`branching`、`loop`、`start_location`、`season_start`、`day`、`weather`、`autumn`、`winter`、`spring`、`summer`、`roads`、`touchstone`、`boons`、`cave_ponds`、`wormattacks`
+- 真实脚本里仍有大量高价值字段尚未结构化，但很适合作为下一批候选：
+  - worldgen / misc：`task_set`、`cavelight`、`prefabswaps_start`、`terrariumchest`、`stageplays`、`junkyard`
+  - worldsettings / misc：`hounds`、`winterhounds`、`summerhounds`、`lightning`、`wildfires`、`petrification`、`earthquakes`、`wormattacks_boss`、`atriumgate`
+  - worldsettings / global：`spawnmode`、`ghostenabled`、`portalresurection`、`resettime`、`krampus`
+  - worldsettings / survivors：`spawnprotection`、`dropeverythingondespawn`、`healthpenalty`、`temperaturedamage`、`hunger`、`darkness`
+  - worldsettings / events：`specialevent` 与各个节庆开关
+- 其中一批字段带有 `masteroption`、`master_controlled` 或 `master_sync` 标记，说明它们更适合作为 cluster 级或主世界控制项建模，而不是简单继续塞回每 shard 独立 overrides。
+- `scripts/worldsettings_overrides.lua` 说明很多字段并不只是“落盘一个键”，而是会映射到多组 `TUNING` / 世界行为；这进一步证明继续走“结构化状态 + overrides 兜底”是对的，但字段分组需要更贴近脚本真实语义。
+
+本轮对语言配置的新增结论：
+
+- `scripts/languages/language.lua` 确认 dedicated server 的语言来源仍是 `TheNet:GetDefaultServerLanguage()`，也就是 cluster 语言配置确实是服务端主源之一。
+- 但完整语言代码对照表不在这个入口文件本身里，`T-011` 仍然不能只凭这次核对直接判定为完成。
+
+基于本轮实物核对，当前更合理的优先级是：
+
+1. 先补一批高价值 worldsettings 字段，而不是继续盲目扩展任意 overrides。
+2. 同步推进 `cluster_token.txt`、admin/allow/block 列表与模组文件边界，避免“世界字段越来越多，但服务器管理关键文件仍缺失”。
+3. 之后再评估是否把世界配置从通用 overrides map 演进为更清晰的子模型或分组表单。
+
 ## 文件边界
 
 ### 1. cluster 共享配置

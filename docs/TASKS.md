@@ -21,6 +21,7 @@
 - 带本地/远端版本比较、手动检查、手动更新、运行中更新保护和日志落盘/排查入口的 DST 更新流程。
 - Master / Caves 世界配置表单已补入一批高频世界生成 / 世界规则字段，并继续保留 raw overrides 兜底。
 - 已补仓库级开发入口：`make dev` 可同时启动 Go 后端和 Vite 前端，`make check` 汇总常用检查。
+- 已完成一轮“公开资料 + 当前实现”的轻量参数基线核对，并确认最新安装产物/脚本的实物核对留到后续通过受管安装链路验证。
 
 ## 任务列表
 
@@ -159,11 +160,12 @@
 实现备注：
 - 继续以 `worldgenoverride.lua` 为主源，不提前切回 `leveldataoverride.lua`。
 - 本轮已把下列字段接成结构化表单，并继续映射回 shard overrides：
-  `world_size`、`branching`、`loop`、`start_location`、`season_start`、`day`、`weather`、`autumn`、`winter`、`spring`、`summer`、`roads`、`touchstone`、`boons`、`cave_ponds`、`wormattacks`
+  `world_size`、`branching`、`loop`、`start_location`、`season_start`、`day`、`weather`、`lightning`、`wildfires`、`petrification`、`hounds`、`autumn`、`winter`、`spring`、`summer`、`spawnmode`、`ghostenabled`、`resettime`、`krampus`、`roads`、`touchstone`、`boons`、`cave_ponds`、`earthquakes`、`wormattacks`
 - 仍保留 “extra world overrides” 文本框，用于透传尚未结构化的世界项。
+- 2026-06-02 已基于最新受管安装产物中的 `scripts/map/customize.lua` 与 `scripts/worldsettings_overrides.lua` 完成二次实物核对；下一批应优先从真实 `WORLDSETTINGS_GROUP` / `WORLDGEN_GROUP` 中挑高价值字段，而不是继续凭印象补项。
 
 下一步：
-继续补资源、生物、事件类高频世界项，并评估是否需要把世界字段从通用 overrides map 进一步演进成独立子模型。
+继续补 `winterhounds`、`summerhounds`、`wormattacks_boss`、`atriumgate`、`spawnprotection`、`dropeverythingondespawn`、`healthpenalty`、`temperaturedamage`、`hunger`、`darkness`、`specialevent` 等高价值 worldsettings 字段，并评估是否需要把世界字段从通用 overrides map 进一步演进成独立子模型。
 
 ### T-011 | todo | 核实语言配置边界
 
@@ -208,6 +210,90 @@
 下一步：
 确认是否需要继续补 `make test`、发布构建入口或前端嵌入后的统一产物流程。
 
+### T-014 | done | 先做轻量配置参数基线核对
+
+目标：
+在不额外下载安装最新 DST 的前提下，先用公开资料和当前实现收敛配置边界，避免后续继续盲目补字段。
+
+完成标准：
+- 明确当前控制器已经覆盖的 `cluster.ini`、`server.ini`、`worldgenoverride.lua` 主链路范围。
+- 记录高优先级缺口，例如 token、权限列表、模组文件与 `leveldataoverride.lua` 兼容导出。
+- 明确这仍不是“按最新安装产物/脚本逐项核实完成”的结论，并把实物核对留给下一步。
+
+实现备注：
+- 本轮不修改用户现有手工 DST 部署。
+- 轻量核对结论记录在 `docs/CONFIGURATION.md`，作为 `T-009` / `T-010` 的前置边界。
+
+下一步：
+通过 Web 前端触发受管 DST 安装或更新，在 managed root 下拿最新受管副本做端到端链路验证，并补“最新安装产物/脚本实物核对”。
+
+### T-017 | done | 基于最新受管安装产物做二次实物核对
+
+目标：
+在受管 DST 已实际安装完成后，基于最新安装产物和真实脚本核对配置参数边界，收敛 `T-009` / `T-010` 的下一批实现目标。
+
+完成标准：
+- 通过 Web 前端完成受管安装与版本检查链路验证。
+- 基于 `scripts.zip`、生成产物和受管安装目录确认当前主链路覆盖范围。
+- 明确一批适合优先结构化支持的高价值字段，而不是继续盲目补项。
+
+实现备注：
+- 本轮已核对 `scripts/map/customize.lua`、`scripts/worldsettings_overrides.lua`、`scripts/languages/language.lua` 以及受管生成的 `cluster.ini` / `server.ini` / `worldgenoverride.lua`。
+- 结论已回填到 `docs/CONFIGURATION.md`，并确认下一批世界字段应优先来自真实 `WORLDSETTINGS_GROUP` / `WORLDGEN_GROUP`。
+
+下一步：
+回到 `T-010` 和 `T-009`，按这次实物核对结果实现一批高价值世界字段与服务器关键文件边界。
+
+### T-018 | done | 固化配置字段提取流程
+
+目标：
+把“从最新受管 DST 安装产物提取配置字段”的过程沉淀成可复用脚本和文档，避免每次手工翻 `scripts.zip`。
+
+完成标准：
+- 提供可直接运行的提取脚本。
+- 文档说明数据来源、使用方式、输出含义和局限。
+- 让后续版本核对能通过固定流程重复执行。
+
+实现备注：
+- 当前脚本从受管 `appmanifest_343050.acf`、`scripts.zip`、`scripts/map/customize.lua` 和语言文件中提取字段清单。
+- 该流程用于生成候选库存，不自动修改控制器结构化模型。
+
+下一步：
+在每次 DST 更新或安装新版本后重新运行字段提取，再据结果选择下一批要结构化支持的字段。
+
+### T-015 | todo | 重做 Web UI 的信息架构与页面分层
+
+目标：
+解决当前 Web UI 把初始化、更新、运行态、日志和配置都堆在同一页面上的问题，重新设计更清晰的导航、页面拆分和操作流。
+
+完成标准：
+- 明确首版 Web UI 的页面结构、导航层级和主操作路径。
+- 把初始化、更新、运行控制、日志查看、cluster 配置等高频任务拆到更清晰的页面或分区，而不是继续堆叠在单页中。
+- 新设计在不牺牲当前功能覆盖的前提下，降低首次使用和日常维护时的理解成本。
+
+实现备注：
+- 这是独立体验改造任务，暂不打断当前 DST 安装验证和配置参数主线。
+- 重设计前应先结合真实使用流程，记录当前单页在发现性、反馈和状态切换上的具体问题点。
+
+下一步：
+先完成受管安装/更新端到端验证与最新安装产物核对，再回头整理 UI 重设计范围和原型方向。
+
+### T-016 | done | 修复更新检查读取本地版本路径错误
+
+目标：
+修复 `Check Now` 在 DST 已安装后仍然失败的问题，确保更新检查从受管 DST 安装目录读取本地 build id。
+
+完成标准：
+- 本地版本读取路径指向受管 `dst/steamapps/appmanifest_343050.acf`。
+- 更新检查不再错误读取 `steamcmd/steamapps`。
+- 补上覆盖该路径选择的最小测试。
+
+实现备注：
+- 这是安装验证阶段暴露出的链路 bug，和“继续扩展配置参数”主线并行修复。
+
+下一步：
+继续执行网页端安装/更新端到端验证，并据最新受管安装产物核对参数面。
+
 ## 暂时不要做
 
 - 不要添加 Docker 支持。
@@ -232,3 +318,4 @@
 - 当前自动重试策略只做每个 shard 一次立即重试，没有退避、上限策略或外部告警通道。
 - 当前 dashboard SSE 仍以整包 snapshot 为主；虽然已经明显减少页面轮询，但如果后续要进一步细化，应该优先事件化 runtime history 和任务状态，而不是把临时成功提示词塞进后端协议。
 - 当前还没有确认 Klei 官方维护的完整 `cluster_language` 代码对照表；语言切换能力后续需要单独核实来源，现阶段不阻塞英语配置支持。
+- 当前“最新 DST 参数面已逐项核对”的结论尚未成立；还需要在 managed root 下安装或更新最新受管 DST，并通过前端链路完成端到端验证后再补实物核对。

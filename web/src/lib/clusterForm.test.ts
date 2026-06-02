@@ -61,6 +61,8 @@ describe('clusterForm helpers', () => {
     expect(form.masterEnabled).toBe(true);
     expect(form.cavesEnabled).toBe(true);
     expect(form.masterWorldSettings.seasonStart).toBe('autumn');
+    expect(form.masterWorldSettings.hounds).toBe('');
+    expect(form.cavesWorldSettings.earthquakes).toBe('');
     expect(form.masterExtraWorldGenOverrides).toBe('');
     expect(clusterFormIsDirty(form, config)).toBe(false);
   });
@@ -97,14 +99,23 @@ describe('clusterForm helpers', () => {
         seasonStart: 'autumn',
         day: 'longday',
         weather: 'often',
+        lightning: 'rare',
+        wildfires: 'never',
+        petrification: 'many',
+        hounds: 'default',
         autumn: 'longseason',
         winter: 'default',
         spring: '',
         summer: '',
+        spawnMode: 'scatter',
+        ghostEnabled: 'always',
+        resetTime: 'fast',
+        krampus: 'rare',
         roads: 'often',
         touchstone: 'rare',
         boons: 'always',
         cavePonds: '',
+        earthquakes: '',
         wormAttacks: ''
       },
       masterExtraWorldGenOverrides: 'bearger=rare',
@@ -120,14 +131,23 @@ describe('clusterForm helpers', () => {
         seasonStart: '',
         day: '',
         weather: '',
+        lightning: '',
+        wildfires: '',
+        petrification: '',
+        hounds: '',
         autumn: '',
         winter: '',
         spring: '',
         summer: '',
+        spawnMode: '',
+        ghostEnabled: '',
+        resetTime: '',
+        krampus: '',
         roads: '',
         touchstone: '',
         boons: '',
         cavePonds: 'often',
+        earthquakes: 'rare',
         wormAttacks: 'never'
       },
       cavesExtraWorldGenOverrides: 'mushtree=often'
@@ -164,12 +184,20 @@ describe('clusterForm helpers', () => {
             { key: 'boons', value: 'always' },
             { key: 'branching', value: 'most' },
             { key: 'day', value: 'longday' },
+            { key: 'ghostenabled', value: 'always' },
+            { key: 'hounds', value: 'default' },
+            { key: 'krampus', value: 'rare' },
+            { key: 'lightning', value: 'rare' },
             { key: 'loop', value: 'always' },
+            { key: 'petrification', value: 'many' },
+            { key: 'resettime', value: 'fast' },
             { key: 'roads', value: 'often' },
             { key: 'season_start', value: 'autumn' },
+            { key: 'spawnmode', value: 'scatter' },
             { key: 'start_location', value: 'plus' },
             { key: 'touchstone', value: 'rare' },
             { key: 'weather', value: 'often' },
+            { key: 'wildfires', value: 'never' },
             { key: 'winter', value: 'default' },
             { key: 'world_size', value: 'huge' }
           ]
@@ -183,6 +211,7 @@ describe('clusterForm helpers', () => {
           worldGenPreset: 'DST_CAVE_PLUS',
           worldGenOverrides: [
             { key: 'cave_ponds', value: 'often' },
+            { key: 'earthquakes', value: 'rare' },
             { key: 'loop', value: 'default' },
             { key: 'mushtree', value: 'often' },
             { key: 'start_location', value: 'caves' },
@@ -199,6 +228,7 @@ describe('clusterForm helpers', () => {
     config.shards[0].worldGenOverrides = [
       { key: 'season_start', value: 'autumn' },
       { key: 'world_size', value: 'huge' },
+      { key: 'hounds', value: 'rare' },
       { key: 'beefalo', value: 'often' }
     ];
 
@@ -206,6 +236,7 @@ describe('clusterForm helpers', () => {
 
     expect(form.masterWorldSettings.seasonStart).toBe('autumn');
     expect(form.masterWorldSettings.worldSize).toBe('huge');
+    expect(form.masterWorldSettings.hounds).toBe('rare');
     expect(form.masterExtraWorldGenOverrides).toBe('beefalo=often');
   });
 
