@@ -27,6 +27,7 @@ export type WorldSettingField = {
 };
 
 export type WorldSettingsFormState = {
+  taskSet: string;
   worldSize: string;
   branching: string;
   loop: string;
@@ -44,14 +45,47 @@ export type WorldSettingsFormState = {
   summer: string;
   spawnMode: string;
   ghostEnabled: string;
+  ghostSanityDrain: string;
+  portalResurrection: string;
   resetTime: string;
   krampus: string;
+  beefaloHeat: string;
   roads: string;
   touchstone: string;
   boons: string;
   cavePonds: string;
+  cavelight: string;
+  prefabSwapsStart: string;
+  moonFissure: string;
+  terrariumChest: string;
+  stagePlays: string;
+  junkyard: string;
   earthquakes: string;
   wormAttacks: string;
+  winterHounds: string;
+  summerHounds: string;
+  wormAttacksBoss: string;
+  atriumGate: string;
+  spawnProtection: string;
+  dropEverythingOnDespawn: string;
+  healthPenalty: string;
+  temperatureDamage: string;
+  hunger: string;
+  darkness: string;
+  specialEvent: string;
+  crowCarnival: string;
+  hallowedNights: string;
+  wintersFeast: string;
+  yearOfTheGobbler: string;
+  yearOfTheVarg: string;
+  yearOfThePig: string;
+  yearOfTheCarrat: string;
+  yearOfTheBeefalo: string;
+  yearOfTheCatcoon: string;
+  yearOfTheBunnyman: string;
+  yearOfTheDragonfly: string;
+  yearOfTheSnake: string;
+  yearOfTheKnight: string;
 };
 
 export type ClusterConfig = {
@@ -129,6 +163,8 @@ export type ClusterFormState = {
   cavesExtraWorldGenOverrides: string;
 };
 
+type ShardFormName = 'Master' | 'Caves';
+
 const frequencyOptions: WorldSettingOption[] = [
   { value: 'never', label: 'Never' },
   { value: 'rare', label: 'Rare' },
@@ -147,6 +183,17 @@ const seasonLengthOptions: WorldSettingOption[] = [
   { value: 'random', label: 'Random' }
 ];
 
+const worldgenFrequencyOptions: WorldSettingOption[] = [
+  { value: 'never', label: 'Never' },
+  { value: 'rare', label: 'Rare' },
+  { value: 'uncommon', label: 'Uncommon' },
+  { value: 'default', label: 'Default' },
+  { value: 'often', label: 'Often' },
+  { value: 'mostly', label: 'Mostly' },
+  { value: 'always', label: 'Always' },
+  { value: 'insane', label: 'Insane' }
+];
+
 const petrificationOptions: WorldSettingOption[] = [
   { value: 'none', label: 'None' },
   { value: 'few', label: 'Few' },
@@ -158,6 +205,15 @@ const petrificationOptions: WorldSettingOption[] = [
 const spawnModeOptions: WorldSettingOption[] = [
   { value: 'fixed', label: 'Portal' },
   { value: 'scatter', label: 'Random' }
+];
+
+const masterTaskSetOptions: WorldSettingOption[] = [
+  { value: 'default', label: 'Default' },
+  { value: 'classic', label: 'Classic' }
+];
+
+const cavesTaskSetOptions: WorldSettingOption[] = [
+  { value: 'cave_default', label: 'Cave Default' }
 ];
 
 const ghostEnabledOptions: WorldSettingOption[] = [
@@ -175,7 +231,50 @@ const resetTimeOptions: WorldSettingOption[] = [
 
 const emptyWorldSettingOption: WorldSettingOption = { value: '', label: 'Preset Default' };
 
+const yesNoOptions: WorldSettingOption[] = [
+  { value: 'never', label: 'Disabled' },
+  { value: 'default', label: 'Default' }
+];
+
+const nonLethalOptions: WorldSettingOption[] = [
+  { value: 'nonlethal', label: 'Non-Lethal' },
+  { value: 'default', label: 'Default' }
+];
+
+const enabledDisabledOptions: WorldSettingOption[] = [
+  { value: 'none', label: 'Disabled' },
+  { value: 'always', label: 'Enabled' }
+];
+
+const extraEventOptions: WorldSettingOption[] = [
+  { value: 'default', label: 'Default' },
+  { value: 'enabled', label: 'Enabled' }
+];
+
+const eventToggleBindings: WorldSettingField[] = [
+  { formKey: 'crowCarnival', overrideKey: 'crow_carnival', label: 'Crow Carnival', description: 'Enable the Crow Carnival event content.', options: extraEventOptions },
+  { formKey: 'hallowedNights', overrideKey: 'hallowed_nights', label: 'Hallowed Nights', description: 'Enable the Hallowed Nights event content.', options: extraEventOptions },
+  { formKey: 'wintersFeast', overrideKey: 'winters_feast', label: "Winter's Feast", description: "Enable the Winter's Feast event content.", options: extraEventOptions },
+  { formKey: 'yearOfTheGobbler', overrideKey: 'year_of_the_gobbler', label: 'Year Of The Gobbler', description: 'Enable the Year of the Gobbler event content.', options: extraEventOptions },
+  { formKey: 'yearOfTheVarg', overrideKey: 'year_of_the_varg', label: 'Year Of The Varg', description: 'Enable the Year of the Varg event content.', options: extraEventOptions },
+  { formKey: 'yearOfThePig', overrideKey: 'year_of_the_pig', label: 'Year Of The Pig', description: 'Enable the Year of the Pig event content.', options: extraEventOptions },
+  { formKey: 'yearOfTheCarrat', overrideKey: 'year_of_the_carrat', label: 'Year Of The Carrat', description: 'Enable the Year of the Carrat event content.', options: extraEventOptions },
+  { formKey: 'yearOfTheBeefalo', overrideKey: 'year_of_the_beefalo', label: 'Year Of The Beefalo', description: 'Enable the Year of the Beefalo event content.', options: extraEventOptions },
+  { formKey: 'yearOfTheCatcoon', overrideKey: 'year_of_the_catcoon', label: 'Year Of The Catcoon', description: 'Enable the Year of the Catcoon event content.', options: extraEventOptions },
+  { formKey: 'yearOfTheBunnyman', overrideKey: 'year_of_the_bunnyman', label: 'Year Of The Bunnyman', description: 'Enable the Year of the Bunnyman event content.', options: extraEventOptions },
+  { formKey: 'yearOfTheDragonfly', overrideKey: 'year_of_the_dragonfly', label: 'Year Of The Dragonfly', description: 'Enable the Year of the Dragonfly event content.', options: extraEventOptions },
+  { formKey: 'yearOfTheSnake', overrideKey: 'year_of_the_snake', label: 'Year Of The Snake', description: 'Enable the Year of the Snake event content.', options: extraEventOptions },
+  { formKey: 'yearOfTheKnight', overrideKey: 'year_of_the_knight', label: 'Year Of The Knight', description: 'Enable the Year of the Knight event content.', options: extraEventOptions }
+];
+
 const worldSettingBindings: WorldSettingField[] = [
+  {
+    formKey: 'taskSet',
+    overrideKey: 'task_set',
+    label: 'Task Set',
+    description: 'Choose the base task layout used to assemble the shard map.',
+    options: masterTaskSetOptions
+  },
   {
     formKey: 'worldSize',
     overrideKey: 'world_size',
@@ -291,6 +390,20 @@ const worldSettingBindings: WorldSettingField[] = [
     options: frequencyOptions
   },
   {
+    formKey: 'winterHounds',
+    overrideKey: 'winterhounds',
+    label: 'Winter Hounds',
+    description: 'Enable or disable winter hound variants during attacks.',
+    options: yesNoOptions
+  },
+  {
+    formKey: 'summerHounds',
+    overrideKey: 'summerhounds',
+    label: 'Summer Hounds',
+    description: 'Enable or disable summer hound variants during attacks.',
+    options: yesNoOptions
+  },
+  {
     formKey: 'autumn',
     overrideKey: 'autumn',
     label: 'Autumn Length',
@@ -333,11 +446,32 @@ const worldSettingBindings: WorldSettingField[] = [
     options: ghostEnabledOptions
   },
   {
+    formKey: 'ghostSanityDrain',
+    overrideKey: 'ghostsanitydrain',
+    label: 'Ghost Sanity Drain',
+    description: 'Control whether ghosts lose sanity over time.',
+    options: enabledDisabledOptions
+  },
+  {
+    formKey: 'portalResurrection',
+    overrideKey: 'portalresurection',
+    label: 'Portal Resurrection',
+    description: 'Allow the Florid Postern to revive survivors directly.',
+    options: enabledDisabledOptions
+  },
+  {
     formKey: 'resetTime',
     overrideKey: 'resettime',
     label: 'World Reset Time',
     description: 'Control how quickly an empty world resets itself.',
     options: resetTimeOptions
+  },
+  {
+    formKey: 'beefaloHeat',
+    overrideKey: 'beefaloheat',
+    label: 'Beefalo Heat',
+    description: 'Adjust how often beefalo mating season occurs.',
+    options: frequencyOptions
   },
   {
     formKey: 'krampus',
@@ -375,6 +509,59 @@ const worldSettingBindings: WorldSettingField[] = [
     options: frequencyOptions
   },
   {
+    formKey: 'cavelight',
+    overrideKey: 'cavelight',
+    label: 'Cave Light Flowers',
+    description: 'Adjust how quickly cave light flowers regrow and spread.',
+    options: [
+      { value: 'never', label: 'Never' },
+      { value: 'veryslow', label: 'Very Slow' },
+      { value: 'slow', label: 'Slow' },
+      { value: 'default', label: 'Default' },
+      { value: 'fast', label: 'Fast' },
+      { value: 'veryfast', label: 'Very Fast' }
+    ]
+  },
+  {
+    formKey: 'prefabSwapsStart',
+    overrideKey: 'prefabswaps_start',
+    label: 'Starting Variety',
+    description: 'Change how much the starting biome composition is shuffled.',
+    options: [
+      { value: 'classic', label: 'Classic' },
+      { value: 'default', label: 'Default' },
+      { value: 'highly random', label: 'Highly Random' }
+    ]
+  },
+  {
+    formKey: 'moonFissure',
+    overrideKey: 'moon_fissure',
+    label: 'Moon Fissures',
+    description: 'Adjust how many moon fissures generate in the forest shard.',
+    options: worldgenFrequencyOptions
+  },
+  {
+    formKey: 'terrariumChest',
+    overrideKey: 'terrariumchest',
+    label: 'Terrarium Chest',
+    description: 'Enable or disable the Terrarium chest worldgen feature.',
+    options: yesNoOptions
+  },
+  {
+    formKey: 'stagePlays',
+    overrideKey: 'stageplays',
+    label: 'Stage Plays',
+    description: 'Enable or disable set pieces related to stage plays.',
+    options: yesNoOptions
+  },
+  {
+    formKey: 'junkyard',
+    overrideKey: 'junkyard',
+    label: 'Junkyard',
+    description: 'Enable or disable the Junkyard worldgen feature.',
+    options: yesNoOptions
+  },
+  {
     formKey: 'earthquakes',
     overrideKey: 'earthquakes',
     label: 'Earthquakes',
@@ -387,13 +574,99 @@ const worldSettingBindings: WorldSettingField[] = [
     label: 'Worm Attacks',
     description: 'Tune periodic worm raid frequency in the caves.',
     options: frequencyOptions
-  }
+  },
+  {
+    formKey: 'wormAttacksBoss',
+    overrideKey: 'wormattacks_boss',
+    label: 'Depth Worm Waves',
+    description: 'Adjust larger cave worm attack waves and boss pressure.',
+    options: frequencyOptions
+  },
+  {
+    formKey: 'atriumGate',
+    overrideKey: 'atriumgate',
+    label: 'Atrium Gate Cooldown',
+    description: 'Control how quickly the Ancient Gateway reactivates.',
+    options: [
+      { value: 'veryslow', label: 'Very Slow' },
+      { value: 'slow', label: 'Slow' },
+      { value: 'default', label: 'Default' },
+      { value: 'fast', label: 'Fast' },
+      { value: 'veryfast', label: 'Very Fast' }
+    ]
+  },
+  {
+    formKey: 'spawnProtection',
+    overrideKey: 'spawnprotection',
+    label: 'Spawn Protection',
+    description: 'Control whether survivors get spawn-area protection when entering the world.',
+    options: [
+      { value: 'never', label: 'Disabled' },
+      { value: 'default', label: 'Default' },
+      { value: 'always', label: 'Always' }
+    ]
+  },
+  {
+    formKey: 'dropEverythingOnDespawn',
+    overrideKey: 'dropeverythingondespawn',
+    label: 'Drop Inventory On Despawn',
+    description: 'Force players to drop their inventory when despawning.',
+    options: [
+      { value: 'default', label: 'Default' },
+      { value: 'always', label: 'Always' }
+    ]
+  },
+  {
+    formKey: 'healthPenalty',
+    overrideKey: 'healthpenalty',
+    label: 'Health Penalty',
+    description: 'Control whether resurrection health penalties apply.',
+    options: [
+      { value: 'none', label: 'Disabled' },
+      { value: 'always', label: 'Enabled' }
+    ]
+  },
+  {
+    formKey: 'temperatureDamage',
+    overrideKey: 'temperaturedamage',
+    label: 'Temperature Damage',
+    description: 'Allow lethal temperature damage or clamp it to non-lethal.',
+    options: nonLethalOptions
+  },
+  {
+    formKey: 'hunger',
+    overrideKey: 'hunger',
+    label: 'Starvation Damage',
+    description: 'Allow lethal starvation damage or clamp it to non-lethal.',
+    options: nonLethalOptions
+  },
+  {
+    formKey: 'darkness',
+    overrideKey: 'darkness',
+    label: 'Darkness Damage',
+    description: 'Allow lethal darkness damage or clamp it to non-lethal.',
+    options: nonLethalOptions
+  },
+  {
+    formKey: 'specialEvent',
+    overrideKey: 'specialevent',
+    label: 'Special Event',
+    description: 'Use the default seasonal live event state or force none.',
+    options: [
+      { value: 'none', label: 'None' },
+      { value: 'default', label: 'Default' }
+    ]
+  },
+  ...eventToggleBindings
 ];
 
 export const masterWorldSettingFields = worldSettingBindings.filter(
   (field) => field.formKey !== 'cavePonds' &&
+    field.formKey !== 'cavelight' &&
     field.formKey !== 'earthquakes' &&
-    field.formKey !== 'wormAttacks'
+    field.formKey !== 'wormAttacks' &&
+    field.formKey !== 'wormAttacksBoss' &&
+    field.formKey !== 'atriumGate'
 );
 
 export const cavesWorldSettingFields = worldSettingBindings.filter(
@@ -414,7 +687,35 @@ export const cavesWorldSettingFields = worldSettingBindings.filter(
     field.formKey !== 'krampus' &&
     field.formKey !== 'roads' &&
     field.formKey !== 'touchstone' &&
-    field.formKey !== 'boons'
+    field.formKey !== 'boons' &&
+    field.formKey !== 'terrariumChest' &&
+    field.formKey !== 'stagePlays' &&
+    field.formKey !== 'junkyard' &&
+    field.formKey !== 'winterHounds' &&
+    field.formKey !== 'summerHounds' &&
+    field.formKey !== 'spawnProtection' &&
+    field.formKey !== 'dropEverythingOnDespawn' &&
+    field.formKey !== 'healthPenalty' &&
+    field.formKey !== 'temperatureDamage' &&
+    field.formKey !== 'hunger' &&
+    field.formKey !== 'darkness' &&
+    field.formKey !== 'specialEvent' &&
+    field.formKey !== 'ghostSanityDrain' &&
+    field.formKey !== 'portalResurrection' &&
+    field.formKey !== 'beefaloHeat' &&
+    field.formKey !== 'crowCarnival' &&
+    field.formKey !== 'hallowedNights' &&
+    field.formKey !== 'wintersFeast' &&
+    field.formKey !== 'yearOfTheGobbler' &&
+    field.formKey !== 'yearOfTheVarg' &&
+    field.formKey !== 'yearOfThePig' &&
+    field.formKey !== 'yearOfTheCarrat' &&
+    field.formKey !== 'yearOfTheBeefalo' &&
+    field.formKey !== 'yearOfTheCatcoon' &&
+    field.formKey !== 'yearOfTheBunnyman' &&
+    field.formKey !== 'yearOfTheDragonfly' &&
+    field.formKey !== 'yearOfTheSnake' &&
+    field.formKey !== 'yearOfTheKnight'
 );
 
 export function clusterFormFromConfig(config: ClusterConfig): ClusterFormState {
@@ -621,6 +922,7 @@ function buildWorldOverrides(settings: WorldSettingsFormState, extraOverrides: s
 
 function emptyWorldSettingsForm(): WorldSettingsFormState {
   return {
+    taskSet: '',
     worldSize: '',
     branching: '',
     loop: '',
@@ -638,14 +940,47 @@ function emptyWorldSettingsForm(): WorldSettingsFormState {
     summer: '',
     spawnMode: '',
     ghostEnabled: '',
+    ghostSanityDrain: '',
+    portalResurrection: '',
     resetTime: '',
+    beefaloHeat: '',
     krampus: '',
     roads: '',
     touchstone: '',
     boons: '',
     cavePonds: '',
+    cavelight: '',
+    prefabSwapsStart: '',
+    moonFissure: '',
+    terrariumChest: '',
+    stagePlays: '',
+    junkyard: '',
     earthquakes: '',
-    wormAttacks: ''
+    wormAttacks: '',
+    winterHounds: '',
+    summerHounds: '',
+    wormAttacksBoss: '',
+    atriumGate: '',
+    spawnProtection: '',
+    dropEverythingOnDespawn: '',
+    healthPenalty: '',
+    temperatureDamage: '',
+    hunger: '',
+    darkness: '',
+    specialEvent: '',
+    crowCarnival: '',
+    hallowedNights: '',
+    wintersFeast: '',
+    yearOfTheGobbler: '',
+    yearOfTheVarg: '',
+    yearOfThePig: '',
+    yearOfTheCarrat: '',
+    yearOfTheBeefalo: '',
+    yearOfTheCatcoon: '',
+    yearOfTheBunnyman: '',
+    yearOfTheDragonfly: '',
+    yearOfTheSnake: '',
+    yearOfTheKnight: ''
   };
 }
 
@@ -653,6 +988,11 @@ function sortWorldOverrides(overrides: WorldOverride[]): WorldOverride[] {
   return [...overrides].sort((a, b) => a.key.localeCompare(b.key));
 }
 
-export function worldSettingOptions(field: WorldSettingField): WorldSettingOption[] {
+export function worldSettingOptions(field: WorldSettingField, shardName?: ShardFormName): WorldSettingOption[] {
+  if (field.formKey === 'taskSet') {
+    const taskSetOptions = shardName === 'Caves' ? cavesTaskSetOptions : masterTaskSetOptions;
+    return [emptyWorldSettingOption, ...taskSetOptions];
+  }
+
   return [emptyWorldSettingOption, ...field.options];
 }

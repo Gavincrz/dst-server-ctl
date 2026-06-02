@@ -161,11 +161,26 @@
 - 继续以 `worldgenoverride.lua` 为主源，不提前切回 `leveldataoverride.lua`。
 - 本轮已把下列字段接成结构化表单，并继续映射回 shard overrides：
   `world_size`、`branching`、`loop`、`start_location`、`season_start`、`day`、`weather`、`lightning`、`wildfires`、`petrification`、`hounds`、`autumn`、`winter`、`spring`、`summer`、`spawnmode`、`ghostenabled`、`resettime`、`krampus`、`roads`、`touchstone`、`boons`、`cave_ponds`、`earthquakes`、`wormattacks`
+- 2026-06-02 已继续补入一批高价值 worldsettings 字段：
+  `winterhounds`、`summerhounds`、`wormattacks_boss`、`atriumgate`、`spawnprotection`、`dropeverythingondespawn`、`healthpenalty`、`temperaturedamage`、`hunger`、`darkness`、`specialevent`。
+  当前仍沿用现有 `worldGenOverrides` 映射链路，其中 Master 专属 / master-controlled 字段先只在 Master 表单暴露，Caves 专属字段只在 Caves 表单暴露。
+- 2026-06-02 已继续补入 `portalresurection` 和 `events` 组节庆开关：
+  `crow_carnival`、`hallowed_nights`、`winters_feast`、`year_of_the_gobbler`、`year_of_the_varg`、`year_of_the_pig`、`year_of_the_carrat`、`year_of_the_beefalo`、`year_of_the_catcoon`、`year_of_the_bunnyman`、`year_of_the_dragonfly`、`year_of_the_snake`、`year_of_the_knight`。
+  这些字段当前同样先挂在 Master 表单，并继续写回现有 shard `worldGenOverrides`。
+- 2026-06-02 已继续补入其余一批 master-controlled global 字段：
+  `ghostsanitydrain`、`beefaloheat`。
+  当前 `global` / `survivors` / `events` 中已结构化的大部分 master-controlled 字段仍先集中在 Master 表单呈现。
+- 2026-06-02 已开始补 `WORLDGEN_GROUP / misc` 字段：
+  `task_set`、`cavelight`、`prefabswaps_start`、`terrariumchest`、`stageplays`、`junkyard`。
+  其中 `task_set` 目前按 shard 提供不同候选项：Master 使用 forest task set，Caves 使用 cave task set，其余字段按 world 归属分别挂到 Master 或 Caves 表单。
+- 2026-06-02 已继续补 `WORLDGEN_GROUP / misc` 中森林专属字段：
+  `moon_fissure`、`balatro`。
+  其中 `moon_fissure` 使用真实 `worldgen_frequency_descriptions` 值域，而不是复用普通 runtime frequency 枚举。
 - 仍保留 “extra world overrides” 文本框，用于透传尚未结构化的世界项。
 - 2026-06-02 已基于最新受管安装产物中的 `scripts/map/customize.lua` 与 `scripts/worldsettings_overrides.lua` 完成二次实物核对；下一批应优先从真实 `WORLDSETTINGS_GROUP` / `WORLDGEN_GROUP` 中挑高价值字段，而不是继续凭印象补项。
 
 下一步：
-继续补 `winterhounds`、`summerhounds`、`wormattacks_boss`、`atriumgate`、`spawnprotection`、`dropeverythingondespawn`、`healthpenalty`、`temperaturedamage`、`hunger`、`darkness`、`specialevent` 等高价值 worldsettings 字段，并评估是否需要把世界字段从通用 overrides map 进一步演进成独立子模型。
+评估是否把 master-controlled worldsettings 从当前 per-shard overrides 进一步收敛成更清晰的子模型或分组表单，并继续补尚未结构化的节庆、突变或其余高价值 `WORLDGEN_GROUP` 字段。
 
 ### T-011 | todo | 核实语言配置边界
 

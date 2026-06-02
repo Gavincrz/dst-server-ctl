@@ -2044,7 +2044,7 @@
                       <label class="field">
                         <span>{field.label}</span>
                         <select bind:value={clusterForm.masterWorldSettings[field.formKey]} disabled={clusterSubmitting}>
-                          {#each worldSettingOptions(field) as option (option.value)}
+                          {#each worldSettingOptions(field, 'Master') as option (option.value)}
                             <option value={option.value}>{option.label}</option>
                           {/each}
                         </select>
@@ -2094,7 +2094,7 @@
                       <label class="field">
                         <span>{field.label}</span>
                         <select bind:value={clusterForm.cavesWorldSettings[field.formKey]} disabled={clusterSubmitting}>
-                          {#each worldSettingOptions(field) as option (option.value)}
+                          {#each worldSettingOptions(field, 'Caves') as option (option.value)}
                             <option value={option.value}>{option.label}</option>
                           {/each}
                         </select>
