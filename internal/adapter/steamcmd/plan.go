@@ -41,7 +41,7 @@ func RemoteVersionPlan(layout domain.ManagedLayout) CommandPlan {
 }
 
 func LocalManifestPath(layout domain.ManagedLayout) string {
-	return filepath.Join(layout.SteamCMD, "steamapps", "appmanifest_"+dstDedicatedServerAppID+".acf")
+	return filepath.Join(layout.DST, "steamapps", "appmanifest_"+dstDedicatedServerAppID+".acf")
 }
 
 var localBuildIDPattern = regexp.MustCompile(`"buildid"\s+"([^"]+)"`)

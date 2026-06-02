@@ -129,7 +129,7 @@ func TestClientRemoteVersionUsesCommandRunner(t *testing.T) {
 
 func TestClientLocalVersionReadsManifest(t *testing.T) {
 	root := t.TempDir()
-	layout := domain.ManagedLayout{SteamCMD: root}
+	layout := domain.ManagedLayout{DST: root}
 	if err := os.MkdirAll(root+"/steamapps", 0o755); err != nil {
 		t.Fatalf("MkdirAll() error = %v", err)
 	}

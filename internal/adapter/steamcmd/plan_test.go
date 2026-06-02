@@ -65,3 +65,16 @@ func TestParseVersions(t *testing.T) {
 		t.Fatalf("remoteVersion = %q, want 654321", remoteVersion)
 	}
 }
+
+func TestLocalManifestPathUsesDSTInstallDir(t *testing.T) {
+	layout := domain.ManagedLayout{
+		SteamCMD: "/srv/managed/steamcmd",
+		DST:      "/srv/managed/dst",
+	}
+
+	got := LocalManifestPath(layout)
+	want := "/srv/managed/dst/steamapps/appmanifest_343050.acf"
+	if got != want {
+		t.Fatalf("LocalManifestPath() = %q, want %q", got, want)
+	}
+}
