@@ -72,7 +72,18 @@ export type WorldSettingsFormState = {
   hunt: string;
   alternateHunt: string;
   wanderingTraderEnabled: string;
+  riftsFrequency: string;
+  riftsEnabled: string;
+  lunarHailFrequency: string;
   acidRainEnabled: string;
+  riftsFrequencyCave: string;
+  riftsEnabledCave: string;
+  portalSpawnRate: string;
+  bananaBushPortalRate: string;
+  lightCrabPortalRate: string;
+  monkeytailPortalRate: string;
+  palmconeSeedPortalRate: string;
+  powderMonkeyPortalRate: string;
   diseaseDelay: string;
   basicResourceRegrowth: string;
   extraStartingItems: string;
@@ -318,6 +329,15 @@ const masterOnlyWorldSettingKeys = new Set<keyof WorldSettingsFormState>([
   'hunt',
   'alternateHunt',
   'wanderingTraderEnabled',
+  'riftsFrequency',
+  'riftsEnabled',
+  'lunarHailFrequency',
+  'portalSpawnRate',
+  'bananaBushPortalRate',
+  'lightCrabPortalRate',
+  'monkeytailPortalRate',
+  'palmconeSeedPortalRate',
+  'powderMonkeyPortalRate',
   'moonFissure',
   'balatro',
   'terrariumChest',
@@ -332,6 +352,8 @@ const cavesOnlyWorldSettingKeys = new Set<keyof WorldSettingsFormState>([
   'wormAttacks',
   'wormAttacksBoss',
   'atriumGate',
+  'riftsFrequencyCave',
+  'riftsEnabledCave',
   'acidRainEnabled'
 ]);
 
@@ -745,11 +767,96 @@ const worldSettingBindings: WorldSettingField[] = [
     options: enabledDisabledOptions
   },
   {
+    formKey: 'riftsFrequency',
+    overrideKey: 'rifts_frequency',
+    label: 'Surface Rifts',
+    description: 'Adjust how often rift activity appears on the surface shard.',
+    options: frequencyOptions
+  },
+  {
+    formKey: 'riftsEnabled',
+    overrideKey: 'rifts_enabled',
+    label: 'Surface Rift State',
+    description: 'Force surface rifts off, leave them at preset default, or keep them always active.',
+    options: [
+      { value: 'never', label: 'Disabled' },
+      { value: 'default', label: 'Default' },
+      { value: 'always', label: 'Always' }
+    ]
+  },
+  {
+    formKey: 'lunarHailFrequency',
+    overrideKey: 'lunarhail_frequency',
+    label: 'Lunar Hail',
+    description: 'Adjust how often lunar hail events occur on the surface shard.',
+    options: frequencyOptions
+  },
+  {
     formKey: 'acidRainEnabled',
     overrideKey: 'acidrain_enabled',
     label: 'Acid Rain',
     description: 'Enable or disable acid rain hazards in the caves.',
     options: enabledDisabledOptions
+  },
+  {
+    formKey: 'riftsFrequencyCave',
+    overrideKey: 'rifts_frequency_cave',
+    label: 'Cave Rifts',
+    description: 'Adjust how often rift activity appears in the caves.',
+    options: frequencyOptions
+  },
+  {
+    formKey: 'riftsEnabledCave',
+    overrideKey: 'rifts_enabled_cave',
+    label: 'Cave Rift State',
+    description: 'Force cave rifts off, leave them at preset default, or keep them always active.',
+    options: [
+      { value: 'never', label: 'Disabled' },
+      { value: 'default', label: 'Default' },
+      { value: 'always', label: 'Always' }
+    ]
+  },
+  {
+    formKey: 'portalSpawnRate',
+    overrideKey: 'portal_spawnrate',
+    label: 'Portal Biome Supplies',
+    description: 'Adjust how many resources spawn around the Florid Postern biome.',
+    options: frequencyOptions
+  },
+  {
+    formKey: 'bananaBushPortalRate',
+    overrideKey: 'bananabush_portalrate',
+    label: 'Portal Banana Bushes',
+    description: 'Adjust banana bush spawns near the surface portal area.',
+    options: frequencyOptions
+  },
+  {
+    formKey: 'lightCrabPortalRate',
+    overrideKey: 'lightcrab_portalrate',
+    label: 'Portal Light Crabs',
+    description: 'Adjust light crab spawns near the surface portal area.',
+    options: frequencyOptions
+  },
+  {
+    formKey: 'monkeytailPortalRate',
+    overrideKey: 'monkeytail_portalrate',
+    label: 'Portal Monkeytails',
+    description: 'Adjust monkeytail reed spawns near the surface portal area.',
+    options: frequencyOptions
+  },
+  {
+    formKey: 'palmconeSeedPortalRate',
+    overrideKey: 'palmcone_seed_portalrate',
+    label: 'Portal Palmcone Seeds',
+    description: 'Adjust palmcone seed spawns near the surface portal area.',
+    options: frequencyOptions
+  },
+  {
+    formKey: 'powderMonkeyPortalRate',
+    overrideKey: 'powder_monkey_portalrate',
+    label: 'Portal Powder Monkeys',
+    description: 'Adjust powder monkey activity near the surface portal area.',
+    options: frequencyOptions
   },
   {
     formKey: 'diseaseDelay',
@@ -1184,7 +1291,18 @@ function emptyWorldSettingsForm(): WorldSettingsFormState {
     hunt: '',
     alternateHunt: '',
     wanderingTraderEnabled: '',
+    riftsFrequency: '',
+    riftsEnabled: '',
+    lunarHailFrequency: '',
     acidRainEnabled: '',
+    riftsFrequencyCave: '',
+    riftsEnabledCave: '',
+    portalSpawnRate: '',
+    bananaBushPortalRate: '',
+    lightCrabPortalRate: '',
+    monkeytailPortalRate: '',
+    palmconeSeedPortalRate: '',
+    powderMonkeyPortalRate: '',
     diseaseDelay: '',
     basicResourceRegrowth: '',
     extraStartingItems: '',

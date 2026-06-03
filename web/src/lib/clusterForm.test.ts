@@ -71,6 +71,8 @@ describe('clusterForm helpers', () => {
     expect(form.masterWorldSettings.balatro).toBe('');
     expect(form.masterWorldSettings.hounds).toBe('');
     expect(form.masterWorldSettings.frogRain).toBe('');
+    expect(form.masterWorldSettings.riftsFrequency).toBe('');
+    expect(form.masterWorldSettings.portalSpawnRate).toBe('');
     expect(form.masterWorldSettings.extraStartingItems).toBe('');
     expect(form.masterWorldSettings.specialEvent).toBe('');
     expect(form.masterWorldSettings.portalResurrection).toBe('');
@@ -150,7 +152,18 @@ describe('clusterForm helpers', () => {
         hunt: 'default',
         alternateHunt: 'never',
         wanderingTraderEnabled: 'always',
+        riftsFrequency: 'often',
+        riftsEnabled: 'always',
+        lunarHailFrequency: 'rare',
         acidRainEnabled: '',
+        riftsFrequencyCave: '',
+        riftsEnabledCave: '',
+        portalSpawnRate: 'often',
+        bananaBushPortalRate: 'rare',
+        lightCrabPortalRate: 'default',
+        monkeytailPortalRate: 'never',
+        palmconeSeedPortalRate: 'always',
+        powderMonkeyPortalRate: 'default',
         diseaseDelay: 'short',
         basicResourceRegrowth: 'always',
         extraStartingItems: '15',
@@ -228,7 +241,18 @@ describe('clusterForm helpers', () => {
         hunt: '',
         alternateHunt: '',
         wanderingTraderEnabled: '',
+        riftsFrequency: '',
+        riftsEnabled: '',
+        lunarHailFrequency: '',
         acidRainEnabled: 'always',
+        riftsFrequencyCave: 'rare',
+        riftsEnabledCave: 'always',
+        portalSpawnRate: '',
+        bananaBushPortalRate: '',
+        lightCrabPortalRate: '',
+        monkeytailPortalRate: '',
+        palmconeSeedPortalRate: '',
+        powderMonkeyPortalRate: '',
         diseaseDelay: 'long',
         basicResourceRegrowth: '',
         extraStartingItems: '',
@@ -323,6 +347,7 @@ describe('clusterForm helpers', () => {
             { key: 'alternatehunt', value: 'never' },
             { key: 'autumn', value: 'longseason' },
             { key: 'balatro', value: 'default' },
+            { key: 'bananabush_portalrate', value: 'rare' },
             { key: 'bearger', value: 'rare' },
             { key: 'branching', value: 'most' },
             { key: 'day', value: 'longday' },
@@ -331,12 +356,20 @@ describe('clusterForm helpers', () => {
             { key: 'hounds', value: 'default' },
             { key: 'hunt', value: 'default' },
             { key: 'junkyard', value: 'default' },
+            { key: 'lightcrab_portalrate', value: 'default' },
             { key: 'lightning', value: 'rare' },
             { key: 'loop', value: 'always' },
+            { key: 'lunarhail_frequency', value: 'rare' },
             { key: 'meteorshowers', value: 'rare' },
+            { key: 'monkeytail_portalrate', value: 'never' },
             { key: 'moon_fissure', value: 'mostly' },
+            { key: 'palmcone_seed_portalrate', value: 'always' },
             { key: 'petrification', value: 'many' },
+            { key: 'portal_spawnrate', value: 'often' },
+            { key: 'powder_monkey_portalrate', value: 'default' },
             { key: 'prefabswaps_start', value: 'highly random' },
+            { key: 'rifts_enabled', value: 'always' },
+            { key: 'rifts_frequency', value: 'often' },
             { key: 'season_start', value: 'autumn' },
             { key: 'stageplays', value: 'never' },
             { key: 'start_location', value: 'plus' },
@@ -368,6 +401,8 @@ describe('clusterForm helpers', () => {
             { key: 'loop', value: 'default' },
             { key: 'mushtree', value: 'often' },
             { key: 'prefabswaps_start', value: 'classic' },
+            { key: 'rifts_enabled_cave', value: 'always' },
+            { key: 'rifts_frequency_cave', value: 'rare' },
             { key: 'start_location', value: 'caves' },
             { key: 'task_set', value: 'cave_default' },
             { key: 'world_size', value: 'medium' },
@@ -399,6 +434,8 @@ describe('clusterForm helpers', () => {
       { key: 'balatro', value: 'default' },
       { key: 'hounds', value: 'rare' },
       { key: 'frograin', value: 'often' },
+      { key: 'rifts_frequency', value: 'often' },
+      { key: 'portal_spawnrate', value: 'rare' },
       { key: 'spawnprotection', value: 'always' },
       { key: 'specialevent', value: 'none' },
       { key: 'beefalo', value: 'often' }
@@ -414,6 +451,8 @@ describe('clusterForm helpers', () => {
     expect(form.masterWorldSettings.balatro).toBe('default');
     expect(form.masterWorldSettings.hounds).toBe('rare');
     expect(form.masterWorldSettings.frogRain).toBe('often');
+    expect(form.masterWorldSettings.riftsFrequency).toBe('often');
+    expect(form.masterWorldSettings.portalSpawnRate).toBe('rare');
     expect(form.masterWorldSettings.spawnProtection).toBe('always');
     expect(form.masterWorldSettings.specialEvent).toBe('none');
     expect(form.masterWorldSettings.ghostSanityDrain).toBe('none');
