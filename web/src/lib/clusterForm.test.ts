@@ -72,6 +72,10 @@ describe('clusterForm helpers', () => {
     expect(form.masterWorldSettings.hounds).toBe('');
     expect(form.masterWorldSettings.frogRain).toBe('');
     expect(form.masterWorldSettings.riftsFrequency).toBe('');
+    expect(form.masterWorldSettings.mutatedHounds).toBe('');
+    expect(form.masterWorldSettings.penguinsMoon).toBe('');
+    expect(form.masterWorldSettings.moonSpider).toBe('');
+    expect(form.masterWorldSettings.mutatedBirds).toBe('');
     expect(form.masterWorldSettings.portalSpawnRate).toBe('');
     expect(form.masterWorldSettings.extraStartingItems).toBe('');
     expect(form.masterWorldSettings.specialEvent).toBe('');
@@ -155,6 +159,12 @@ describe('clusterForm helpers', () => {
         riftsFrequency: 'often',
         riftsEnabled: 'always',
         lunarHailFrequency: 'rare',
+        mutatedHounds: 'default',
+        penguinsMoon: 'never',
+        moonSpider: 'often',
+        mutatedBirds: 'default',
+        mutatedMerm: 'never',
+        mutatedSpiderQueen: 'default',
         acidRainEnabled: '',
         riftsFrequencyCave: '',
         riftsEnabledCave: '',
@@ -244,6 +254,12 @@ describe('clusterForm helpers', () => {
         riftsFrequency: '',
         riftsEnabled: '',
         lunarHailFrequency: '',
+        mutatedHounds: '',
+        penguinsMoon: '',
+        moonSpider: 'rare',
+        mutatedBirds: 'default',
+        mutatedMerm: '',
+        mutatedSpiderQueen: 'never',
         acidRainEnabled: 'always',
         riftsFrequencyCave: 'rare',
         riftsEnabledCave: 'always',
@@ -363,7 +379,13 @@ describe('clusterForm helpers', () => {
             { key: 'meteorshowers', value: 'rare' },
             { key: 'monkeytail_portalrate', value: 'never' },
             { key: 'moon_fissure', value: 'mostly' },
+            { key: 'moon_spider', value: 'often' },
+            { key: 'mutated_birds', value: 'default' },
+            { key: 'mutated_hounds', value: 'default' },
+            { key: 'mutated_merm', value: 'never' },
+            { key: 'mutated_spiderqueen', value: 'default' },
             { key: 'palmcone_seed_portalrate', value: 'always' },
+            { key: 'penguins_moon', value: 'never' },
             { key: 'petrification', value: 'many' },
             { key: 'portal_spawnrate', value: 'often' },
             { key: 'powder_monkey_portalrate', value: 'default' },
@@ -399,7 +421,10 @@ describe('clusterForm helpers', () => {
             { key: 'disease_delay', value: 'long' },
             { key: 'earthquakes', value: 'rare' },
             { key: 'loop', value: 'default' },
+            { key: 'moon_spider', value: 'rare' },
             { key: 'mushtree', value: 'often' },
+            { key: 'mutated_birds', value: 'default' },
+            { key: 'mutated_spiderqueen', value: 'never' },
             { key: 'prefabswaps_start', value: 'classic' },
             { key: 'rifts_enabled_cave', value: 'always' },
             { key: 'rifts_frequency_cave', value: 'rare' },
@@ -435,7 +460,11 @@ describe('clusterForm helpers', () => {
       { key: 'hounds', value: 'rare' },
       { key: 'frograin', value: 'often' },
       { key: 'rifts_frequency', value: 'often' },
+      { key: 'moon_spider', value: 'often' },
+      { key: 'mutated_birds', value: 'default' },
+      { key: 'mutated_merm', value: 'never' },
       { key: 'portal_spawnrate', value: 'rare' },
+      { key: 'penguins_moon', value: 'default' },
       { key: 'spawnprotection', value: 'always' },
       { key: 'specialevent', value: 'none' },
       { key: 'beefalo', value: 'often' }
@@ -452,6 +481,10 @@ describe('clusterForm helpers', () => {
     expect(form.masterWorldSettings.hounds).toBe('rare');
     expect(form.masterWorldSettings.frogRain).toBe('often');
     expect(form.masterWorldSettings.riftsFrequency).toBe('often');
+    expect(form.masterWorldSettings.moonSpider).toBe('often');
+    expect(form.masterWorldSettings.mutatedBirds).toBe('default');
+    expect(form.masterWorldSettings.mutatedMerm).toBe('never');
+    expect(form.masterWorldSettings.penguinsMoon).toBe('default');
     expect(form.masterWorldSettings.portalSpawnRate).toBe('rare');
     expect(form.masterWorldSettings.spawnProtection).toBe('always');
     expect(form.masterWorldSettings.specialEvent).toBe('none');
@@ -477,6 +510,8 @@ describe('clusterForm helpers', () => {
     expect(masterWorldGenSettingFields.some((field) => field.formKey === 'seasonStart')).toBe(true);
     expect(masterWorldGenSettingFields.some((field) => field.formKey === 'specialEvent')).toBe(false);
     expect(masterWorldGenSettingFields.some((field) => field.formKey === 'wormAttacks')).toBe(false);
+    expect(masterWorldGenSettingFields.some((field) => field.formKey === 'mutatedHounds')).toBe(true);
+    expect(masterWorldGenSettingFields.some((field) => field.formKey === 'moonSpider')).toBe(true);
 
     expect(masterWorldControlSettingFields.some((field) => field.formKey === 'specialEvent')).toBe(true);
     expect(masterWorldControlSettingFields.some((field) => field.formKey === 'portalResurrection')).toBe(true);
@@ -484,5 +519,7 @@ describe('clusterForm helpers', () => {
 
     expect(cavesWorldSettingFields.some((field) => field.formKey === 'wormAttacks')).toBe(true);
     expect(cavesWorldSettingFields.some((field) => field.formKey === 'specialEvent')).toBe(false);
+    expect(cavesWorldSettingFields.some((field) => field.formKey === 'moonSpider')).toBe(true);
+    expect(cavesWorldSettingFields.some((field) => field.formKey === 'mutatedHounds')).toBe(false);
   });
 });

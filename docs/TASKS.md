@@ -196,11 +196,17 @@
   - `WORLDSETTINGS_GROUP / misc`：`rifts_frequency`、`rifts_enabled`、`lunarhail_frequency`、`rifts_frequency_cave`、`rifts_enabled_cave`
   - `WORLDSETTINGS_GROUP / portal_resources`：`portal_spawnrate`、`bananabush_portalrate`、`lightcrab_portalrate`、`monkeytail_portalrate`、`palmcone_seed_portalrate`、`powder_monkey_portalrate`
   这批字段当前都保持 shard 级建模，继续通过现有 world settings 表单映射回对应 shard 的 `worldgenoverride.lua`。
+- 2026-06-03 已基于当前受管安装产物 `buildid 23206748` 继续补入一小批
+  `WORLDSETTINGS_GROUP / lunar_mutations` shard 级字段：
+  `mutated_hounds`、`penguins_moon`、`moon_spider`、`mutated_birds`、`mutated_merm`、`mutated_spiderqueen`。
+  其中 `mutated_hounds` / `penguins_moon` 仅在 Master 表单暴露，其余按真实 world 归属同时支持
+  Master / Caves，并继续沿现有 shard `worldGenOverrides` 写回 `worldgenoverride.lua`。
 - 仍保留 “extra world overrides” 文本框，用于透传尚未结构化的世界项。
 - 2026-06-02 已基于最新受管安装产物中的 `scripts/map/customize.lua` 与 `scripts/worldsettings_overrides.lua` 完成二次实物核对；下一批应优先从真实 `WORLDSETTINGS_GROUP` / `WORLDGEN_GROUP` 中挑高价值字段，而不是继续凭印象补项。
 
 下一步：
-在已完成前后端分组收敛的基础上，继续把世界配置模型向“客户端语义分组”推进，优先补剩余高价值 `WORLDSETTINGS_GROUP` 字段，例如 `lunar_mutations`、`giants` 或其余高频环境/生物项。
+在已完成前后端分组收敛的基础上，继续把世界配置模型向“客户端语义分组”推进，优先补完
+`lunar_mutations` 余下 gestalt / boss 相关字段，或切到 `giants` 组挑一小批高频 boss 开关继续落地。
 
 ### T-011 | todo | 核实语言配置边界
 

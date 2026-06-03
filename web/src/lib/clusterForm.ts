@@ -75,6 +75,12 @@ export type WorldSettingsFormState = {
   riftsFrequency: string;
   riftsEnabled: string;
   lunarHailFrequency: string;
+  mutatedHounds: string;
+  penguinsMoon: string;
+  moonSpider: string;
+  mutatedBirds: string;
+  mutatedMerm: string;
+  mutatedSpiderQueen: string;
   acidRainEnabled: string;
   riftsFrequencyCave: string;
   riftsEnabledCave: string;
@@ -332,6 +338,8 @@ const masterOnlyWorldSettingKeys = new Set<keyof WorldSettingsFormState>([
   'riftsFrequency',
   'riftsEnabled',
   'lunarHailFrequency',
+  'mutatedHounds',
+  'penguinsMoon',
   'portalSpawnRate',
   'bananaBushPortalRate',
   'lightCrabPortalRate',
@@ -790,6 +798,48 @@ const worldSettingBindings: WorldSettingField[] = [
     label: 'Lunar Hail',
     description: 'Adjust how often lunar hail events occur on the surface shard.',
     options: frequencyOptions
+  },
+  {
+    formKey: 'mutatedHounds',
+    overrideKey: 'mutated_hounds',
+    label: 'Mutated Hounds',
+    description: 'Enable or disable lunar-mutated hounds on the surface shard.',
+    options: yesNoOptions
+  },
+  {
+    formKey: 'penguinsMoon',
+    overrideKey: 'penguins_moon',
+    label: 'Mutated Pengulls',
+    description: 'Enable or disable moon-mutated pengulls on the surface shard.',
+    options: yesNoOptions
+  },
+  {
+    formKey: 'moonSpider',
+    overrideKey: 'moon_spider',
+    label: 'Moon Spiders',
+    description: 'Adjust how often moon spiders appear on this shard.',
+    options: frequencyOptions
+  },
+  {
+    formKey: 'mutatedBirds',
+    overrideKey: 'mutated_birds',
+    label: 'Mutated Birds',
+    description: 'Enable or disable lunar-mutated birds on this shard.',
+    options: yesNoOptions
+  },
+  {
+    formKey: 'mutatedMerm',
+    overrideKey: 'mutated_merm',
+    label: 'Mutated Merms',
+    description: 'Enable or disable lunar-mutated merms on this shard.',
+    options: yesNoOptions
+  },
+  {
+    formKey: 'mutatedSpiderQueen',
+    overrideKey: 'mutated_spiderqueen',
+    label: 'Mutated Spider Queen',
+    description: 'Enable or disable lunar-mutated spider queen encounters on this shard.',
+    options: yesNoOptions
   },
   {
     formKey: 'acidRainEnabled',
@@ -1294,6 +1344,12 @@ function emptyWorldSettingsForm(): WorldSettingsFormState {
     riftsFrequency: '',
     riftsEnabled: '',
     lunarHailFrequency: '',
+    mutatedHounds: '',
+    penguinsMoon: '',
+    moonSpider: '',
+    mutatedBirds: '',
+    mutatedMerm: '',
+    mutatedSpiderQueen: '',
     acidRainEnabled: '',
     riftsFrequencyCave: '',
     riftsEnabledCave: '',
