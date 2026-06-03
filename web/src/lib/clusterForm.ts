@@ -57,6 +57,7 @@ export type WorldSettingsFormState = {
   cavelight: string;
   prefabSwapsStart: string;
   moonFissure: string;
+  balatro: string;
   terrariumChest: string;
   stagePlays: string;
   junkyard: string;
@@ -66,12 +67,25 @@ export type WorldSettingsFormState = {
   summerHounds: string;
   wormAttacksBoss: string;
   atriumGate: string;
+  frogRain: string;
+  meteorShowers: string;
+  hunt: string;
+  alternateHunt: string;
+  wanderingTraderEnabled: string;
+  acidRainEnabled: string;
+  diseaseDelay: string;
+  basicResourceRegrowth: string;
+  extraStartingItems: string;
+  seasonalStartingItems: string;
   spawnProtection: string;
   dropEverythingOnDespawn: string;
   healthPenalty: string;
+  lessDamageTaken: string;
   temperatureDamage: string;
   hunger: string;
   darkness: string;
+  shadowCreatures: string;
+  brightmareCreatures: string;
   specialEvent: string;
   crowCarnival: string;
   hallowedNights: string;
@@ -244,9 +258,24 @@ const nonLethalOptions: WorldSettingOption[] = [
   { value: 'default', label: 'Default' }
 ];
 
+const startingItemOptions: WorldSettingOption[] = [
+  { value: '0', label: 'None' },
+  { value: '5', label: 'Few' },
+  { value: 'default', label: 'Default' },
+  { value: '15', label: 'Many' },
+  { value: '20', label: 'Most' },
+  { value: 'none', label: 'Disabled' }
+];
+
 const enabledDisabledOptions: WorldSettingOption[] = [
   { value: 'none', label: 'Disabled' },
   { value: 'always', label: 'Enabled' }
+];
+
+const lessDamageTakenOptions: WorldSettingOption[] = [
+  { value: 'always', label: 'Less Damage' },
+  { value: 'none', label: 'Default' },
+  { value: 'more', label: 'More Damage' }
 ];
 
 const extraEventOptions: WorldSettingOption[] = [
@@ -284,7 +313,13 @@ const masterOnlyWorldSettingKeys = new Set<keyof WorldSettingsFormState>([
   'winter',
   'spring',
   'summer',
+  'frogRain',
+  'meteorShowers',
+  'hunt',
+  'alternateHunt',
+  'wanderingTraderEnabled',
   'moonFissure',
+  'balatro',
   'terrariumChest',
   'stagePlays',
   'junkyard'
@@ -296,7 +331,8 @@ const cavesOnlyWorldSettingKeys = new Set<keyof WorldSettingsFormState>([
   'earthquakes',
   'wormAttacks',
   'wormAttacksBoss',
-  'atriumGate'
+  'atriumGate',
+  'acidRainEnabled'
 ]);
 
 const masterControlledWorldSettingKeys = new Set<keyof WorldSettingsFormState>([
@@ -310,12 +346,18 @@ const masterControlledWorldSettingKeys = new Set<keyof WorldSettingsFormState>([
   'roads',
   'touchstone',
   'boons',
+  'basicResourceRegrowth',
+  'extraStartingItems',
+  'seasonalStartingItems',
   'spawnProtection',
   'dropEverythingOnDespawn',
   'healthPenalty',
+  'lessDamageTaken',
   'temperatureDamage',
   'hunger',
   'darkness',
+  'shadowCreatures',
+  'brightmareCreatures',
   'specialEvent',
   'crowCarnival',
   'hallowedNights',
@@ -606,6 +648,13 @@ const worldSettingBindings: WorldSettingField[] = [
     options: worldgenFrequencyOptions
   },
   {
+    formKey: 'balatro',
+    overrideKey: 'balatro',
+    label: 'Balatro',
+    description: 'Enable or disable Balatro crossover worldgen content.',
+    options: yesNoOptions
+  },
+  {
     formKey: 'terrariumChest',
     overrideKey: 'terrariumchest',
     label: 'Terrarium Chest',
@@ -661,6 +710,82 @@ const worldSettingBindings: WorldSettingField[] = [
     ]
   },
   {
+    formKey: 'frogRain',
+    overrideKey: 'frograin',
+    label: 'Frog Rain',
+    description: 'Adjust how often frog rain events happen on the surface shard.',
+    options: frequencyOptions
+  },
+  {
+    formKey: 'meteorShowers',
+    overrideKey: 'meteorshowers',
+    label: 'Meteor Showers',
+    description: 'Adjust meteor shower frequency on the surface shard.',
+    options: frequencyOptions
+  },
+  {
+    formKey: 'hunt',
+    overrideKey: 'hunt',
+    label: 'Suspicious Dirt Piles',
+    description: 'Control how often hunt tracks spawn on the surface shard.',
+    options: frequencyOptions
+  },
+  {
+    formKey: 'alternateHunt',
+    overrideKey: 'alternatehunt',
+    label: 'Varied Hunts',
+    description: 'Control how often alternate hunt targets replace normal hunts.',
+    options: frequencyOptions
+  },
+  {
+    formKey: 'wanderingTraderEnabled',
+    overrideKey: 'wanderingtrader_enabled',
+    label: 'Wandering Trader',
+    description: 'Enable or disable the wandering trader on the surface shard.',
+    options: enabledDisabledOptions
+  },
+  {
+    formKey: 'acidRainEnabled',
+    overrideKey: 'acidrain_enabled',
+    label: 'Acid Rain',
+    description: 'Enable or disable acid rain hazards in the caves.',
+    options: enabledDisabledOptions
+  },
+  {
+    formKey: 'diseaseDelay',
+    overrideKey: 'disease_delay',
+    label: 'Disease',
+    description: 'Control how quickly plant disease can appear in the world.',
+    options: [
+      { value: 'none', label: 'Disabled' },
+      { value: 'random', label: 'Random' },
+      { value: 'long', label: 'Long' },
+      { value: 'default', label: 'Default' },
+      { value: 'short', label: 'Short' }
+    ]
+  },
+  {
+    formKey: 'basicResourceRegrowth',
+    overrideKey: 'basicresource_regrowth',
+    label: 'Basic Resource Regrowth',
+    description: 'Enable or disable shared regrowth support for basic world resources.',
+    options: enabledDisabledOptions
+  },
+  {
+    formKey: 'extraStartingItems',
+    overrideKey: 'extrastartingitems',
+    label: 'Extra Starting Items',
+    description: 'Give survivors additional starting supplies beyond the preset default.',
+    options: startingItemOptions
+  },
+  {
+    formKey: 'seasonalStartingItems',
+    overrideKey: 'seasonalstartingitems',
+    label: 'Seasonal Starting Items',
+    description: 'Enable or disable seasonal starter item bundles.',
+    options: yesNoOptions
+  },
+  {
     formKey: 'spawnProtection',
     overrideKey: 'spawnprotection',
     label: 'Spawn Protection',
@@ -692,6 +817,13 @@ const worldSettingBindings: WorldSettingField[] = [
     ]
   },
   {
+    formKey: 'lessDamageTaken',
+    overrideKey: 'lessdamagetaken',
+    label: 'Damage Taken',
+    description: 'Bias survivor damage taken toward easier or harsher settings.',
+    options: lessDamageTakenOptions
+  },
+  {
     formKey: 'temperatureDamage',
     overrideKey: 'temperaturedamage',
     label: 'Temperature Damage',
@@ -711,6 +843,20 @@ const worldSettingBindings: WorldSettingField[] = [
     label: 'Darkness Damage',
     description: 'Allow lethal darkness damage or clamp it to non-lethal.',
     options: nonLethalOptions
+  },
+  {
+    formKey: 'shadowCreatures',
+    overrideKey: 'shadowcreatures',
+    label: 'Shadow Creatures',
+    description: 'Adjust shadow creature pressure for all survivors.',
+    options: frequencyOptions
+  },
+  {
+    formKey: 'brightmareCreatures',
+    overrideKey: 'brightmarecreatures',
+    label: 'Brightmare Creatures',
+    description: 'Adjust brightmare creature pressure for all survivors.',
+    options: frequencyOptions
   },
   {
     formKey: 'specialEvent',
@@ -1023,6 +1169,7 @@ function emptyWorldSettingsForm(): WorldSettingsFormState {
     cavelight: '',
     prefabSwapsStart: '',
     moonFissure: '',
+    balatro: '',
     terrariumChest: '',
     stagePlays: '',
     junkyard: '',
@@ -1032,12 +1179,25 @@ function emptyWorldSettingsForm(): WorldSettingsFormState {
     summerHounds: '',
     wormAttacksBoss: '',
     atriumGate: '',
+    frogRain: '',
+    meteorShowers: '',
+    hunt: '',
+    alternateHunt: '',
+    wanderingTraderEnabled: '',
+    acidRainEnabled: '',
+    diseaseDelay: '',
+    basicResourceRegrowth: '',
+    extraStartingItems: '',
+    seasonalStartingItems: '',
     spawnProtection: '',
     dropEverythingOnDespawn: '',
     healthPenalty: '',
+    lessDamageTaken: '',
     temperatureDamage: '',
     hunger: '',
     darkness: '',
+    shadowCreatures: '',
+    brightmareCreatures: '',
     specialEvent: '',
     crowCarnival: '',
     hallowedNights: '',

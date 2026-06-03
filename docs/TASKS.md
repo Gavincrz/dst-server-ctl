@@ -186,11 +186,17 @@
   `Master/worldgenoverride.lua` 时把这组设置并入落盘内容。
   当前前端表单仍沿用现有 `masterWorldSettings` 表单状态，但请求构造时已把
   “Master shard worldgen/world rules” 与 “cluster-wide master-controlled rules” 拆成不同 API 字段。
+- 2026-06-03 已继续补一批更贴近客户端语义分组的真实脚本字段：
+  - `WORLDGEN_GROUP / misc`：补齐 `balatro`
+  - `WORLDSETTINGS_GROUP / misc`：`frograin`、`meteorshowers`、`hunt`、`alternatehunt`、`disease_delay`、`wanderingtrader_enabled`、`acidrain_enabled`
+  - `WORLDSETTINGS_GROUP / survivors`：`extrastartingitems`、`seasonalstartingitems`、`lessdamagetaken`、`shadowcreatures`、`brightmarecreatures`
+  - `WORLDSETTINGS_GROUP / resources`：`basicresource_regrowth`
+  其中 master-controlled 字段现已进入 cluster 级 `masterWorldSettings` 白名单与表单映射，其余字段继续按 shard 写回 `worldgenoverride.lua`。
 - 仍保留 “extra world overrides” 文本框，用于透传尚未结构化的世界项。
 - 2026-06-02 已基于最新受管安装产物中的 `scripts/map/customize.lua` 与 `scripts/worldsettings_overrides.lua` 完成二次实物核对；下一批应优先从真实 `WORLDSETTINGS_GROUP` / `WORLDGEN_GROUP` 中挑高价值字段，而不是继续凭印象补项。
 
 下一步：
-在已完成前后端分组收敛的基础上，继续把世界配置模型向“客户端语义分组”推进，并继续补尚未结构化的节庆、突变或其余高价值 `WORLDGEN_GROUP` / `WORLDSETTINGS_GROUP` 字段。
+在已完成前后端分组收敛的基础上，继续把世界配置模型向“客户端语义分组”推进，优先补剩余高价值 `WORLDSETTINGS_GROUP` 字段，例如 `rifts_*`、`lunar_mutations`、`giants`、`portal_resources` 或其余高频环境/生物项。
 
 ### T-011 | todo | 核实语言配置边界
 

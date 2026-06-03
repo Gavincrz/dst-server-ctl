@@ -182,6 +182,67 @@ func TestClusterConfigServiceUpdateValidatesConfig(t *testing.T) {
 	}
 }
 
+func TestClusterConfigServiceUpdateAcceptsExpandedMasterWorldSettings(t *testing.T) {
+	ctx := context.Background()
+	createdAt := time.Date(2026, 4, 24, 8, 0, 0, 0, time.UTC)
+	repo := &fakeClusterConfigRepository{
+		config: domain.ClusterConfig{
+			ClusterName:      "Existing",
+			ClusterIntention: "cooperative",
+			GameMode:         "survival",
+			MaxPlayers:       6,
+			Language:         "en",
+			TickRate:         15,
+			Shards: []domain.ShardConfig{
+				{Name: domain.ShardMaster, Enabled: true, ServerPort: 10999, MasterServerPort: 27016, AuthenticationPort: 8766, WorldGenPreset: "SURVIVAL_TOGETHER", WorldGenOverrides: map[string]string{}},
+				{Name: domain.ShardCaves, Enabled: true, ServerPort: 11000, MasterServerPort: 27017, AuthenticationPort: 8767, WorldGenPreset: "DST_CAVE", WorldGenOverrides: map[string]string{}},
+			},
+			CreatedAt: createdAt,
+			UpdatedAt: createdAt,
+		},
+	}
+	service := NewClusterConfigService(repo, nil)
+
+	config, err := service.Update(ctx, domain.ClusterConfig{
+		ClusterName:         "Existing",
+		ClusterIntention:    "cooperative",
+		GameMode:            "survival",
+		MaxPlayers:          6,
+		Language:            "en",
+		TickRate:            15,
+		BindIP:              "127.0.0.1",
+		MasterPort:          10888,
+		ClusterKey:          "dst-server-ctl",
+		MasterWorldSettings: map[string]string{"basicresource_regrowth": "always", "extrastartingitems": "15", "lessdamagetaken": "always", "shadowcreatures": "rare"},
+		Shards: []domain.ShardConfig{
+			{Name: domain.ShardMaster, Enabled: true, ServerPort: 10999, MasterServerPort: 27016, AuthenticationPort: 8766, WorldGenPreset: "SURVIVAL_TOGETHER", WorldGenOverrides: map[string]string{"balatro": "default", "frograin": "often"}},
+			{Name: domain.ShardCaves, Enabled: true, ServerPort: 11000, MasterServerPort: 27017, AuthenticationPort: 8767, WorldGenPreset: "DST_CAVE", WorldGenOverrides: map[string]string{"acidrain_enabled": "always", "disease_delay": "long"}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Update() error = %v", err)
+	}
+
+	if config.MasterWorldSettings["basicresource_regrowth"] != "always" {
+		t.Fatalf("MasterWorldSettings = %#v, want basicresource_regrowth", config.MasterWorldSettings)
+	}
+	if config.MasterWorldSettings["extrastartingitems"] != "15" {
+		t.Fatalf("MasterWorldSettings = %#v, want extrastartingitems", config.MasterWorldSettings)
+	}
+	if config.MasterWorldSettings["lessdamagetaken"] != "always" {
+		t.Fatalf("MasterWorldSettings = %#v, want lessdamagetaken", config.MasterWorldSettings)
+	}
+	if config.MasterWorldSettings["shadowcreatures"] != "rare" {
+		t.Fatalf("MasterWorldSettings = %#v, want shadowcreatures", config.MasterWorldSettings)
+	}
+	if config.Shards[0].WorldGenOverrides["balatro"] != "default" || config.Shards[0].WorldGenOverrides["frograin"] != "often" {
+		t.Fatalf("Master shard overrides = %#v, want expanded worldsetting keys preserved", config.Shards[0].WorldGenOverrides)
+	}
+	if config.Shards[1].WorldGenOverrides["acidrain_enabled"] != "always" || config.Shards[1].WorldGenOverrides["disease_delay"] != "long" {
+		t.Fatalf("Caves shard overrides = %#v, want expanded cave worldsetting keys preserved", config.Shards[1].WorldGenOverrides)
+	}
+}
+
 func TestClusterConfigServiceInitializeReturnsRepositoryErrors(t *testing.T) {
 	ctx := context.Background()
 	wantErr := errors.New("database unavailable")

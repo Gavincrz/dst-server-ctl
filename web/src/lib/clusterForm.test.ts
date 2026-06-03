@@ -68,7 +68,10 @@ describe('clusterForm helpers', () => {
     expect(form.masterWorldSettings.seasonStart).toBe('autumn');
     expect(form.masterWorldSettings.prefabSwapsStart).toBe('');
     expect(form.masterWorldSettings.moonFissure).toBe('');
+    expect(form.masterWorldSettings.balatro).toBe('');
     expect(form.masterWorldSettings.hounds).toBe('');
+    expect(form.masterWorldSettings.frogRain).toBe('');
+    expect(form.masterWorldSettings.extraStartingItems).toBe('');
     expect(form.masterWorldSettings.specialEvent).toBe('');
     expect(form.masterWorldSettings.portalResurrection).toBe('');
     expect(form.masterWorldSettings.ghostSanityDrain).toBe('');
@@ -138,15 +141,29 @@ describe('clusterForm helpers', () => {
         cavelight: '',
         prefabSwapsStart: 'highly random',
         moonFissure: 'mostly',
+        balatro: 'default',
         terrariumChest: 'default',
         stagePlays: 'never',
         junkyard: 'default',
+        frogRain: 'often',
+        meteorShowers: 'rare',
+        hunt: 'default',
+        alternateHunt: 'never',
+        wanderingTraderEnabled: 'always',
+        acidRainEnabled: '',
+        diseaseDelay: 'short',
+        basicResourceRegrowth: 'always',
+        extraStartingItems: '15',
+        seasonalStartingItems: 'default',
         spawnProtection: 'always',
         dropEverythingOnDespawn: 'always',
         healthPenalty: 'none',
+        lessDamageTaken: 'always',
         temperatureDamage: 'nonlethal',
         hunger: 'default',
         darkness: 'nonlethal',
+        shadowCreatures: 'rare',
+        brightmareCreatures: 'often',
         specialEvent: 'none',
         crowCarnival: 'enabled',
         hallowedNights: '',
@@ -202,15 +219,29 @@ describe('clusterForm helpers', () => {
         cavelight: 'fast',
         prefabSwapsStart: 'classic',
         moonFissure: '',
+        balatro: '',
         terrariumChest: '',
         stagePlays: '',
         junkyard: '',
+        frogRain: '',
+        meteorShowers: '',
+        hunt: '',
+        alternateHunt: '',
+        wanderingTraderEnabled: '',
+        acidRainEnabled: 'always',
+        diseaseDelay: 'long',
+        basicResourceRegrowth: '',
+        extraStartingItems: '',
+        seasonalStartingItems: '',
         spawnProtection: '',
         dropEverythingOnDespawn: '',
         healthPenalty: '',
+        lessDamageTaken: '',
         temperatureDamage: '',
         hunger: '',
         darkness: '',
+        shadowCreatures: '',
+        brightmareCreatures: '',
         specialEvent: '',
         crowCarnival: '',
         hallowedNights: '',
@@ -254,19 +285,25 @@ describe('clusterForm helpers', () => {
       masterPort: 12000,
       clusterKey: 'cluster-abc',
       masterWorldSettings: [
+        { key: 'basicresource_regrowth', value: 'always' },
         { key: 'beefaloheat', value: 'often' },
         { key: 'boons', value: 'always' },
+        { key: 'brightmarecreatures', value: 'often' },
         { key: 'crow_carnival', value: 'enabled' },
         { key: 'darkness', value: 'nonlethal' },
         { key: 'dropeverythingondespawn', value: 'always' },
+        { key: 'extrastartingitems', value: '15' },
         { key: 'ghostenabled', value: 'always' },
         { key: 'ghostsanitydrain', value: 'none' },
         { key: 'healthpenalty', value: 'none' },
         { key: 'hunger', value: 'default' },
         { key: 'krampus', value: 'rare' },
+        { key: 'lessdamagetaken', value: 'always' },
         { key: 'portalresurection', value: 'always' },
         { key: 'resettime', value: 'fast' },
         { key: 'roads', value: 'often' },
+        { key: 'seasonalstartingitems', value: 'default' },
+        { key: 'shadowcreatures', value: 'rare' },
         { key: 'spawnmode', value: 'scatter' },
         { key: 'spawnprotection', value: 'always' },
         { key: 'specialevent', value: 'none' },
@@ -283,14 +320,20 @@ describe('clusterForm helpers', () => {
           authenticationPort: 8768,
           worldGenPreset: 'SURVIVAL_TOGETHER_CLASSIC',
           worldGenOverrides: [
+            { key: 'alternatehunt', value: 'never' },
             { key: 'autumn', value: 'longseason' },
+            { key: 'balatro', value: 'default' },
             { key: 'bearger', value: 'rare' },
             { key: 'branching', value: 'most' },
             { key: 'day', value: 'longday' },
+            { key: 'disease_delay', value: 'short' },
+            { key: 'frograin', value: 'often' },
             { key: 'hounds', value: 'default' },
+            { key: 'hunt', value: 'default' },
             { key: 'junkyard', value: 'default' },
             { key: 'lightning', value: 'rare' },
             { key: 'loop', value: 'always' },
+            { key: 'meteorshowers', value: 'rare' },
             { key: 'moon_fissure', value: 'mostly' },
             { key: 'petrification', value: 'many' },
             { key: 'prefabswaps_start', value: 'highly random' },
@@ -300,6 +343,7 @@ describe('clusterForm helpers', () => {
             { key: 'summerhounds', value: 'never' },
             { key: 'task_set', value: 'classic' },
             { key: 'terrariumchest', value: 'default' },
+            { key: 'wanderingtrader_enabled', value: 'always' },
             { key: 'weather', value: 'often' },
             { key: 'wildfires', value: 'never' },
             { key: 'winter', value: 'default' },
@@ -315,9 +359,11 @@ describe('clusterForm helpers', () => {
           authenticationPort: 8769,
           worldGenPreset: 'DST_CAVE_PLUS',
           worldGenOverrides: [
+            { key: 'acidrain_enabled', value: 'always' },
             { key: 'atriumgate', value: 'fast' },
             { key: 'cave_ponds', value: 'often' },
             { key: 'cavelight', value: 'fast' },
+            { key: 'disease_delay', value: 'long' },
             { key: 'earthquakes', value: 'rare' },
             { key: 'loop', value: 'default' },
             { key: 'mushtree', value: 'often' },
@@ -339,7 +385,10 @@ describe('clusterForm helpers', () => {
       { key: 'ghostsanitydrain', value: 'none' },
       { key: 'beefaloheat', value: 'often' },
       { key: 'portalresurection', value: 'always' },
-      { key: 'winters_feast', value: 'enabled' }
+      { key: 'winters_feast', value: 'enabled' },
+      { key: 'basicresource_regrowth', value: 'always' },
+      { key: 'extrastartingitems', value: '15' },
+      { key: 'shadowcreatures', value: 'rare' }
     ];
     config.shards[0].worldGenOverrides = [
       { key: 'season_start', value: 'autumn' },
@@ -347,7 +396,9 @@ describe('clusterForm helpers', () => {
       { key: 'task_set', value: 'classic' },
       { key: 'prefabswaps_start', value: 'highly random' },
       { key: 'moon_fissure', value: 'mostly' },
+      { key: 'balatro', value: 'default' },
       { key: 'hounds', value: 'rare' },
+      { key: 'frograin', value: 'often' },
       { key: 'spawnprotection', value: 'always' },
       { key: 'specialevent', value: 'none' },
       { key: 'beefalo', value: 'often' }
@@ -360,13 +411,18 @@ describe('clusterForm helpers', () => {
     expect(form.masterWorldSettings.taskSet).toBe('classic');
     expect(form.masterWorldSettings.prefabSwapsStart).toBe('highly random');
     expect(form.masterWorldSettings.moonFissure).toBe('mostly');
+    expect(form.masterWorldSettings.balatro).toBe('default');
     expect(form.masterWorldSettings.hounds).toBe('rare');
+    expect(form.masterWorldSettings.frogRain).toBe('often');
     expect(form.masterWorldSettings.spawnProtection).toBe('always');
     expect(form.masterWorldSettings.specialEvent).toBe('none');
     expect(form.masterWorldSettings.ghostSanityDrain).toBe('none');
     expect(form.masterWorldSettings.beefaloHeat).toBe('often');
     expect(form.masterWorldSettings.portalResurrection).toBe('always');
     expect(form.masterWorldSettings.wintersFeast).toBe('enabled');
+    expect(form.masterWorldSettings.basicResourceRegrowth).toBe('always');
+    expect(form.masterWorldSettings.extraStartingItems).toBe('15');
+    expect(form.masterWorldSettings.shadowCreatures).toBe('rare');
     expect(form.masterExtraWorldGenOverrides).toBe('beefalo=often');
   });
 
