@@ -6,7 +6,8 @@
     clusterFormIsDirty,
     clusterRequestFromForm,
     cavesWorldSettingFields,
-    masterWorldSettingFields,
+    masterWorldControlSettingFields,
+    masterWorldGenSettingFields,
     type ClusterConfig,
     type ClusterFormState,
     worldSettingOptions
@@ -2037,10 +2038,10 @@
                     <option value="COMPLETE_DARKNESS">Complete Darkness</option>
                   </select>
                 </div>
-                <label class="field field-wide">
-                  <span>World Generation And Rules</span>
+                <div class="field field-wide">
+                  <span>Master World Generation</span>
                   <div class="toggle-grid">
-                    {#each masterWorldSettingFields as field (field.overrideKey)}
+                    {#each masterWorldGenSettingFields as field (field.overrideKey)}
                       <label class="field">
                         <span>{field.label}</span>
                         <select bind:value={clusterForm.masterWorldSettings[field.formKey]} disabled={clusterSubmitting}>
@@ -2052,7 +2053,24 @@
                       </label>
                     {/each}
                   </div>
-                </label>
+                </div>
+                <div class="field field-wide">
+                  <span>Cluster-Wide Survivor And Event Rules</span>
+                  <small>These overrides are still written into the Master shard file because DST treats them as master-controlled world settings.</small>
+                  <div class="toggle-grid">
+                    {#each masterWorldControlSettingFields as field (field.overrideKey)}
+                      <label class="field">
+                        <span>{field.label}</span>
+                        <select bind:value={clusterForm.masterWorldSettings[field.formKey]} disabled={clusterSubmitting}>
+                          {#each worldSettingOptions(field, 'Master') as option (option.value)}
+                            <option value={option.value}>{option.label}</option>
+                          {/each}
+                        </select>
+                        <small>{field.description}</small>
+                      </label>
+                    {/each}
+                  </div>
+                </div>
                 <label class="field field-wide">
                   <span>Extra World Overrides</span>
                   <textarea bind:value={clusterForm.masterExtraWorldGenOverrides} disabled={clusterSubmitting} rows="5" placeholder="beefalo=often&#10;penguins=never"></textarea>
@@ -2087,7 +2105,7 @@
                     <option value="DST_CAVE_PLUS">DST Cave Plus</option>
                   </select>
                 </div>
-                <label class="field field-wide">
+                <div class="field field-wide">
                   <span>World Generation And Rules</span>
                   <div class="toggle-grid">
                     {#each cavesWorldSettingFields as field (field.overrideKey)}
@@ -2102,7 +2120,7 @@
                       </label>
                     {/each}
                   </div>
-                </label>
+                </div>
                 <label class="field field-wide">
                   <span>Extra World Overrides</span>
                   <textarea bind:value={clusterForm.cavesExtraWorldGenOverrides} disabled={clusterSubmitting} rows="5" placeholder="mushtree=often&#10;bunnymen=rare"></textarea>

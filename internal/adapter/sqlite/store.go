@@ -221,10 +221,11 @@ WHERE id = 1`).Scan(
 		return domain.ClusterConfig{}, err
 	}
 
-	return config, nil
+	return splitClusterConfigFromStorage(config), nil
 }
 
 func (s *Store) SaveClusterConfig(ctx context.Context, config domain.ClusterConfig) error {
+	config = flattenClusterConfigForStorage(config)
 	row := clusterConfigRowFromDomain(config)
 
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -333,6 +334,50 @@ VALUES (?, ?, ?)`,
 	}
 
 	return nil
+}
+
+func flattenClusterConfigForStorage(config domain.ClusterConfig) domain.ClusterConfig {
+	cloned := config
+	cloned.MasterWorldSettings = maps.Clone(config.MasterWorldSettings)
+	cloned.Shards = append([]domain.ShardConfig(nil), config.Shards...)
+	for i := range cloned.Shards {
+		cloned.Shards[i].WorldGenOverrides = maps.Clone(config.Shards[i].WorldGenOverrides)
+		if cloned.Shards[i].Name != domain.ShardMaster {
+			continue
+		}
+		if cloned.Shards[i].WorldGenOverrides == nil {
+			cloned.Shards[i].WorldGenOverrides = map[string]string{}
+		}
+		for key, value := range config.MasterWorldSettings {
+			cloned.Shards[i].WorldGenOverrides[key] = value
+		}
+	}
+
+	return cloned
+}
+
+func splitClusterConfigFromStorage(config domain.ClusterConfig) domain.ClusterConfig {
+	cloned := config
+	cloned.MasterWorldSettings = maps.Clone(config.MasterWorldSettings)
+	cloned.Shards = append([]domain.ShardConfig(nil), config.Shards...)
+	if cloned.MasterWorldSettings == nil {
+		cloned.MasterWorldSettings = map[string]string{}
+	}
+	for i := range cloned.Shards {
+		cloned.Shards[i].WorldGenOverrides = maps.Clone(config.Shards[i].WorldGenOverrides)
+		if cloned.Shards[i].Name != domain.ShardMaster {
+			continue
+		}
+		for key, value := range cloned.Shards[i].WorldGenOverrides {
+			if !domain.IsMasterControlledWorldSettingKey(key) {
+				continue
+			}
+			cloned.MasterWorldSettings[key] = value
+			delete(cloned.Shards[i].WorldGenOverrides, key)
+		}
+	}
+
+	return cloned
 }
 
 func (s *Store) CreateTask(ctx context.Context, task domain.Task) error {

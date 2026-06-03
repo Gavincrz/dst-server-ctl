@@ -56,6 +56,8 @@ DST 文件 writer 放在 adapter 层。handler 和 UI 不能手写这些格式�
 - cluster 共享配置：`cluster.ini`、token、admin/allow/block 列表
 - shard 专属配置：各 shard `server.ini`
 - 世界配置：各 shard `worldgenoverride.lua`，必要时兼容 `leveldataoverride.lua`
+  当前 worldgen / shard-specific overrides 与 cluster 级 master-controlled worldsettings 在领域模型中分开表达，
+  但仍统一由 DST writer 合并输出到 `Master/worldgenoverride.lua` 和对应 shard 文件。
 - 模组配置：`dedicated_server_mods_setup.lua` 与各 shard `modoverrides.lua`
 
 ## 进程策略

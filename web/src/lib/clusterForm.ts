@@ -105,6 +105,7 @@ export type ClusterConfig = {
   bindIP: string;
   masterPort: number;
   clusterKey: string;
+  masterWorldSettings: WorldOverride[];
   shards: ClusterShard[];
   createdAt: string;
   updatedAt: string;
@@ -127,6 +128,7 @@ export type ClusterUpdateRequest = {
   bindIP: string;
   masterPort: number;
   clusterKey: string;
+  masterWorldSettings: WorldOverride[];
   shards: ClusterShard[];
 };
 
@@ -164,6 +166,7 @@ export type ClusterFormState = {
 };
 
 type ShardFormName = 'Master' | 'Caves';
+type WorldSettingScope = 'shard' | 'master-control';
 
 const frequencyOptions: WorldSettingOption[] = [
   { value: 'never', label: 'Never' },
@@ -266,6 +269,68 @@ const eventToggleBindings: WorldSettingField[] = [
   { formKey: 'yearOfTheSnake', overrideKey: 'year_of_the_snake', label: 'Year Of The Snake', description: 'Enable the Year of the Snake event content.', options: extraEventOptions },
   { formKey: 'yearOfTheKnight', overrideKey: 'year_of_the_knight', label: 'Year Of The Knight', description: 'Enable the Year of the Knight event content.', options: extraEventOptions }
 ];
+
+const masterOnlyWorldSettingKeys = new Set<keyof WorldSettingsFormState>([
+  'seasonStart',
+  'day',
+  'weather',
+  'lightning',
+  'wildfires',
+  'petrification',
+  'hounds',
+  'winterHounds',
+  'summerHounds',
+  'autumn',
+  'winter',
+  'spring',
+  'summer',
+  'moonFissure',
+  'terrariumChest',
+  'stagePlays',
+  'junkyard'
+]);
+
+const cavesOnlyWorldSettingKeys = new Set<keyof WorldSettingsFormState>([
+  'cavePonds',
+  'cavelight',
+  'earthquakes',
+  'wormAttacks',
+  'wormAttacksBoss',
+  'atriumGate'
+]);
+
+const masterControlledWorldSettingKeys = new Set<keyof WorldSettingsFormState>([
+  'spawnMode',
+  'ghostEnabled',
+  'ghostSanityDrain',
+  'portalResurrection',
+  'resetTime',
+  'beefaloHeat',
+  'krampus',
+  'roads',
+  'touchstone',
+  'boons',
+  'spawnProtection',
+  'dropEverythingOnDespawn',
+  'healthPenalty',
+  'temperatureDamage',
+  'hunger',
+  'darkness',
+  'specialEvent',
+  'crowCarnival',
+  'hallowedNights',
+  'wintersFeast',
+  'yearOfTheGobbler',
+  'yearOfTheVarg',
+  'yearOfThePig',
+  'yearOfTheCarrat',
+  'yearOfTheBeefalo',
+  'yearOfTheCatcoon',
+  'yearOfTheBunnyman',
+  'yearOfTheDragonfly',
+  'yearOfTheSnake',
+  'yearOfTheKnight'
+]);
 
 const worldSettingBindings: WorldSettingField[] = [
   {
@@ -660,68 +725,44 @@ const worldSettingBindings: WorldSettingField[] = [
   ...eventToggleBindings
 ];
 
-export const masterWorldSettingFields = worldSettingBindings.filter(
-  (field) => field.formKey !== 'cavePonds' &&
-    field.formKey !== 'cavelight' &&
-    field.formKey !== 'earthquakes' &&
-    field.formKey !== 'wormAttacks' &&
-    field.formKey !== 'wormAttacksBoss' &&
-    field.formKey !== 'atriumGate'
+function worldSettingScope(field: WorldSettingField): WorldSettingScope {
+  if (masterControlledWorldSettingKeys.has(field.formKey)) {
+    return 'master-control';
+  }
+
+  return 'shard';
+}
+
+function worldSettingAvailableOnShard(field: WorldSettingField, shardName: ShardFormName): boolean {
+  if (masterOnlyWorldSettingKeys.has(field.formKey)) {
+    return shardName === 'Master';
+  }
+  if (cavesOnlyWorldSettingKeys.has(field.formKey)) {
+    return shardName === 'Caves';
+  }
+  if (masterControlledWorldSettingKeys.has(field.formKey)) {
+    return shardName === 'Master';
+  }
+
+  return true;
+}
+
+export const masterWorldGenSettingFields = worldSettingBindings.filter(
+  (field) => worldSettingAvailableOnShard(field, 'Master') && worldSettingScope(field) === 'shard'
+);
+
+export const masterWorldControlSettingFields = worldSettingBindings.filter(
+  (field) => worldSettingAvailableOnShard(field, 'Master') && worldSettingScope(field) === 'master-control'
 );
 
 export const cavesWorldSettingFields = worldSettingBindings.filter(
-  (field) => field.formKey !== 'seasonStart' &&
-    field.formKey !== 'day' &&
-    field.formKey !== 'weather' &&
-    field.formKey !== 'lightning' &&
-    field.formKey !== 'wildfires' &&
-    field.formKey !== 'petrification' &&
-    field.formKey !== 'hounds' &&
-    field.formKey !== 'autumn' &&
-    field.formKey !== 'winter' &&
-    field.formKey !== 'spring' &&
-    field.formKey !== 'summer' &&
-    field.formKey !== 'spawnMode' &&
-    field.formKey !== 'ghostEnabled' &&
-    field.formKey !== 'resetTime' &&
-    field.formKey !== 'krampus' &&
-    field.formKey !== 'roads' &&
-    field.formKey !== 'touchstone' &&
-    field.formKey !== 'boons' &&
-    field.formKey !== 'terrariumChest' &&
-    field.formKey !== 'stagePlays' &&
-    field.formKey !== 'junkyard' &&
-    field.formKey !== 'winterHounds' &&
-    field.formKey !== 'summerHounds' &&
-    field.formKey !== 'spawnProtection' &&
-    field.formKey !== 'dropEverythingOnDespawn' &&
-    field.formKey !== 'healthPenalty' &&
-    field.formKey !== 'temperatureDamage' &&
-    field.formKey !== 'hunger' &&
-    field.formKey !== 'darkness' &&
-    field.formKey !== 'specialEvent' &&
-    field.formKey !== 'ghostSanityDrain' &&
-    field.formKey !== 'portalResurrection' &&
-    field.formKey !== 'beefaloHeat' &&
-    field.formKey !== 'crowCarnival' &&
-    field.formKey !== 'hallowedNights' &&
-    field.formKey !== 'wintersFeast' &&
-    field.formKey !== 'yearOfTheGobbler' &&
-    field.formKey !== 'yearOfTheVarg' &&
-    field.formKey !== 'yearOfThePig' &&
-    field.formKey !== 'yearOfTheCarrat' &&
-    field.formKey !== 'yearOfTheBeefalo' &&
-    field.formKey !== 'yearOfTheCatcoon' &&
-    field.formKey !== 'yearOfTheBunnyman' &&
-    field.formKey !== 'yearOfTheDragonfly' &&
-    field.formKey !== 'yearOfTheSnake' &&
-    field.formKey !== 'yearOfTheKnight'
+  (field) => worldSettingAvailableOnShard(field, 'Caves')
 );
 
 export function clusterFormFromConfig(config: ClusterConfig): ClusterFormState {
   const master = shard(config.shards, 'Master');
   const caves = shard(config.shards, 'Caves');
-  const masterWorld = splitWorldSettings(master.worldGenOverrides);
+  const masterWorld = splitWorldSettings(master.worldGenOverrides, config.masterWorldSettings);
   const cavesWorld = splitWorldSettings(caves.worldGenOverrides);
 
   return {
@@ -779,6 +820,7 @@ export function clusterRequestFromConfig(config: ClusterConfig): ClusterUpdateRe
     bindIP: config.bindIP,
     masterPort: config.masterPort,
     clusterKey: config.clusterKey,
+    masterWorldSettings: [...config.masterWorldSettings].sort((a, b) => a.key.localeCompare(b.key)),
     shards: [
       { ...master, name: 'Master', enabled: master.enabled },
       { ...caves, name: 'Caves', enabled: caves.enabled }
@@ -808,6 +850,11 @@ export function clusterRequestFromForm(form: ClusterFormState): ClusterUpdateReq
     bindIP: form.bindIP,
     masterPort: Number.isNaN(parsedMasterPort) ? 0 : parsedMasterPort,
     clusterKey: form.clusterKey,
+    masterWorldSettings: buildWorldOverrides(
+      form.masterWorldSettings,
+      '',
+      (field) => worldSettingScope(field) === 'master-control'
+    ),
     shards: [
       {
         name: 'Master',
@@ -816,7 +863,11 @@ export function clusterRequestFromForm(form: ClusterFormState): ClusterUpdateReq
         masterServerPort: parseNumber(form.masterMasterServerPort),
         authenticationPort: parseNumber(form.masterAuthenticationPort),
         worldGenPreset: form.masterWorldGenPreset,
-        worldGenOverrides: buildWorldOverrides(form.masterWorldSettings, form.masterExtraWorldGenOverrides)
+        worldGenOverrides: buildWorldOverrides(
+          form.masterWorldSettings,
+          form.masterExtraWorldGenOverrides,
+          (field) => worldSettingScope(field) === 'shard'
+        )
       },
       {
         name: 'Caves',
@@ -883,15 +934,27 @@ function parseWorldOverrides(value: string): WorldOverride[] {
   );
 }
 
-function splitWorldSettings(overrides: WorldOverride[]): { settings: WorldSettingsFormState; extraOverrides: WorldOverride[] } {
+function splitWorldSettings(
+  overrides: WorldOverride[],
+  extraSettings: WorldOverride[] = []
+): { settings: WorldSettingsFormState; extraOverrides: WorldOverride[] } {
   const settings = emptyWorldSettingsForm();
   const remaining = new Map(overrides.map((override) => [override.key, override.value]));
+  const masterControlled = new Map(extraSettings.map((override) => [override.key, override.value]));
 
   for (const field of worldSettingBindings) {
     const value = remaining.get(field.overrideKey);
     if (value !== undefined) {
       settings[field.formKey] = value;
       remaining.delete(field.overrideKey);
+      continue;
+    }
+
+    if (worldSettingScope(field) === 'master-control') {
+      const masterValue = masterControlled.get(field.overrideKey);
+      if (masterValue !== undefined) {
+        settings[field.formKey] = masterValue;
+      }
     }
   }
 
@@ -903,10 +966,18 @@ function splitWorldSettings(overrides: WorldOverride[]): { settings: WorldSettin
   };
 }
 
-function buildWorldOverrides(settings: WorldSettingsFormState, extraOverrides: string): WorldOverride[] {
+function buildWorldOverrides(
+  settings: WorldSettingsFormState,
+  extraOverrides: string,
+  includeField: (field: WorldSettingField) => boolean = () => true
+): WorldOverride[] {
   const merged = new Map(parseWorldOverrides(extraOverrides).map((override) => [override.key, override.value]));
 
   for (const field of worldSettingBindings) {
+    if (!includeField(field)) {
+      continue;
+    }
+
     merged.delete(field.overrideKey);
 
     const value = settings[field.formKey].trim();

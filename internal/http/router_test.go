@@ -655,12 +655,13 @@ func TestGetClusterConfigEndpoint(t *testing.T) {
 		Installation: fakeInstallationStatusReader{},
 		Cluster: fakeClusterConfigService{
 			config: domain.ClusterConfig{
-				ClusterName:        "Managed DST",
-				ClusterDescription: "test",
-				GameMode:           "survival",
-				MaxPlayers:         8,
-				Language:           "en",
-				PauseWhenEmpty:     true,
+				ClusterName:         "Managed DST",
+				ClusterDescription:  "test",
+				GameMode:            "survival",
+				MaxPlayers:          8,
+				Language:            "en",
+				PauseWhenEmpty:      true,
+				MasterWorldSettings: map[string]string{"specialevent": "none"},
 				Shards: []domain.ShardConfig{
 					{Name: domain.ShardMaster, Enabled: true},
 					{Name: domain.ShardCaves, Enabled: false},
@@ -687,6 +688,9 @@ func TestGetClusterConfigEndpoint(t *testing.T) {
 	if payload.ClusterName != "Managed DST" {
 		t.Fatalf("ClusterName = %q, want Managed DST", payload.ClusterName)
 	}
+	if len(payload.MasterWorldSettings) != 1 || payload.MasterWorldSettings[0].Key != "specialevent" {
+		t.Fatalf("MasterWorldSettings = %#v, want specialevent response", payload.MasterWorldSettings)
+	}
 	if len(payload.Shards) != 2 {
 		t.Fatalf("shard count = %d, want 2", len(payload.Shards))
 	}
@@ -699,22 +703,23 @@ func TestUpdateClusterConfigEndpoint(t *testing.T) {
 		Installation: fakeInstallationStatusReader{},
 		Cluster: fakeClusterConfigService{
 			updated: domain.ClusterConfig{
-				ClusterName:        "Managed DST",
-				ClusterDescription: "test",
-				ClusterPassword:    "secret",
-				ClusterIntention:   "cooperative",
-				GameMode:           "endless",
-				MaxPlayers:         10,
-				Language:           "en",
-				PVP:                true,
-				PauseWhenEmpty:     false,
-				OfflineCluster:     false,
-				LANOnlyCluster:     false,
-				TickRate:           15,
-				ConsoleEnabled:     true,
-				BindIP:             "127.0.0.1",
-				MasterPort:         10888,
-				ClusterKey:         "dst-server-ctl",
+				ClusterName:         "Managed DST",
+				ClusterDescription:  "test",
+				ClusterPassword:     "secret",
+				ClusterIntention:    "cooperative",
+				GameMode:            "endless",
+				MaxPlayers:          10,
+				Language:            "en",
+				PVP:                 true,
+				PauseWhenEmpty:      false,
+				OfflineCluster:      false,
+				LANOnlyCluster:      false,
+				TickRate:            15,
+				ConsoleEnabled:      true,
+				BindIP:              "127.0.0.1",
+				MasterPort:          10888,
+				ClusterKey:          "dst-server-ctl",
+				MasterWorldSettings: map[string]string{"specialevent": "none"},
 				Shards: []domain.ShardConfig{
 					{Name: domain.ShardMaster, Enabled: true, ServerPort: 10999, MasterServerPort: 27016, AuthenticationPort: 8766},
 					{Name: domain.ShardCaves, Enabled: true, ServerPort: 11000, MasterServerPort: 27017, AuthenticationPort: 8767},
@@ -726,7 +731,7 @@ func TestUpdateClusterConfigEndpoint(t *testing.T) {
 		InstallTasks: fakeInstallationTaskService{},
 	})
 
-	body := strings.NewReader(`{"clusterName":"Managed DST","clusterDescription":"test","clusterPassword":"secret","clusterIntention":"cooperative","gameMode":"endless","maxPlayers":10,"language":"en","pvp":true,"pauseWhenEmpty":false,"offlineCluster":false,"lanOnlyCluster":false,"tickRate":15,"consoleEnabled":true,"bindIP":"127.0.0.1","masterPort":10888,"clusterKey":"dst-server-ctl","shards":[{"name":"Master","enabled":true,"serverPort":10999,"masterServerPort":27016,"authenticationPort":8766},{"name":"Caves","enabled":true,"serverPort":11000,"masterServerPort":27017,"authenticationPort":8767}]}`)
+	body := strings.NewReader(`{"clusterName":"Managed DST","clusterDescription":"test","clusterPassword":"secret","clusterIntention":"cooperative","gameMode":"endless","maxPlayers":10,"language":"en","pvp":true,"pauseWhenEmpty":false,"offlineCluster":false,"lanOnlyCluster":false,"tickRate":15,"consoleEnabled":true,"bindIP":"127.0.0.1","masterPort":10888,"clusterKey":"dst-server-ctl","masterWorldSettings":[{"key":"specialevent","value":"none"}],"shards":[{"name":"Master","enabled":true,"serverPort":10999,"masterServerPort":27016,"authenticationPort":8766},{"name":"Caves","enabled":true,"serverPort":11000,"masterServerPort":27017,"authenticationPort":8767}]}`)
 	request := httptest.NewRequest(nethttp.MethodPut, "/api/v1/cluster", body)
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, request)

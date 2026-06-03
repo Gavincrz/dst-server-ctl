@@ -283,6 +283,7 @@ func clusterConfigsEqual(a, b *domain.ClusterConfig) bool {
 		a.BindIP != b.BindIP ||
 		a.MasterPort != b.MasterPort ||
 		a.ClusterKey != b.ClusterKey ||
+		!maps.Equal(a.MasterWorldSettings, b.MasterWorldSettings) ||
 		len(a.Shards) != len(b.Shards) {
 		return false
 	}
@@ -302,6 +303,7 @@ func clusterConfigsEqual(a, b *domain.ClusterConfig) bool {
 
 func cloneClusterConfig(config domain.ClusterConfig) *domain.ClusterConfig {
 	cloned := config
+	cloned.MasterWorldSettings = maps.Clone(config.MasterWorldSettings)
 	cloned.Shards = append([]domain.ShardConfig(nil), config.Shards...)
 	for i := range cloned.Shards {
 		cloned.Shards[i].WorldGenOverrides = maps.Clone(config.Shards[i].WorldGenOverrides)

@@ -32,7 +32,7 @@ func NewClusterConfigService(repo ClusterConfigRepository, writer ClusterFilesWr
 func (s *ClusterConfigService) Initialize(ctx context.Context) (domain.ClusterConfig, error) {
 	config, err := s.repo.GetClusterConfig(ctx)
 	if err == nil {
-		return config, nil
+		return normalizeClusterConfig(config)
 	}
 	if !errors.Is(err, domain.ErrClusterConfigNotFound) {
 		return domain.ClusterConfig{}, err
@@ -51,7 +51,12 @@ func (s *ClusterConfigService) Initialize(ctx context.Context) (domain.ClusterCo
 }
 
 func (s *ClusterConfigService) Get(ctx context.Context) (domain.ClusterConfig, error) {
-	return s.repo.GetClusterConfig(ctx)
+	config, err := s.repo.GetClusterConfig(ctx)
+	if err != nil {
+		return domain.ClusterConfig{}, err
+	}
+
+	return normalizeClusterConfig(config)
 }
 
 func (s *ClusterConfigService) Update(ctx context.Context, config domain.ClusterConfig) (domain.ClusterConfig, error) {
@@ -87,22 +92,23 @@ func (s *ClusterConfigService) writeClusterFiles(ctx context.Context, config dom
 
 func defaultClusterConfig(now time.Time) domain.ClusterConfig {
 	return domain.ClusterConfig{
-		ClusterName:        "DST Server",
-		ClusterDescription: "",
-		ClusterPassword:    "",
-		ClusterIntention:   "cooperative",
-		GameMode:           "survival",
-		MaxPlayers:         6,
-		Language:           "en",
-		PVP:                false,
-		PauseWhenEmpty:     true,
-		OfflineCluster:     false,
-		LANOnlyCluster:     false,
-		TickRate:           15,
-		ConsoleEnabled:     true,
-		BindIP:             "127.0.0.1",
-		MasterPort:         10888,
-		ClusterKey:         "dst-server-ctl",
+		ClusterName:         "DST Server",
+		ClusterDescription:  "",
+		ClusterPassword:     "",
+		ClusterIntention:    "cooperative",
+		GameMode:            "survival",
+		MaxPlayers:          6,
+		Language:            "en",
+		PVP:                 false,
+		PauseWhenEmpty:      true,
+		OfflineCluster:      false,
+		LANOnlyCluster:      false,
+		TickRate:            15,
+		ConsoleEnabled:      true,
+		BindIP:              "127.0.0.1",
+		MasterPort:          10888,
+		ClusterKey:          "dst-server-ctl",
+		MasterWorldSettings: map[string]string{},
 		Shards: []domain.ShardConfig{
 			{Name: domain.ShardMaster, Enabled: true, ServerPort: 10999, MasterServerPort: 27016, AuthenticationPort: 8766, WorldGenPreset: "SURVIVAL_TOGETHER", WorldGenOverrides: map[string]string{}},
 			{Name: domain.ShardCaves, Enabled: true, ServerPort: 11000, MasterServerPort: 27017, AuthenticationPort: 8767, WorldGenPreset: "DST_CAVE", WorldGenOverrides: map[string]string{}},
@@ -113,6 +119,7 @@ func defaultClusterConfig(now time.Time) domain.ClusterConfig {
 }
 
 func normalizeClusterConfig(config domain.ClusterConfig) (domain.ClusterConfig, error) {
+	config = splitMasterWorldSettings(config)
 	config.ClusterName = strings.TrimSpace(config.ClusterName)
 	config.ClusterDescription = strings.TrimSpace(config.ClusterDescription)
 	config.ClusterPassword = strings.TrimSpace(config.ClusterPassword)
@@ -142,6 +149,22 @@ func normalizeClusterConfig(config domain.ClusterConfig) (domain.ClusterConfig, 
 	}
 	if len(config.Shards) == 0 {
 		return domain.ClusterConfig{}, fmt.Errorf("%w: at least one shard is required", domain.ErrInvalidClusterConfig)
+	}
+
+	normalizedMasterWorldSettings := make(map[string]string, len(config.MasterWorldSettings))
+	for key, value := range config.MasterWorldSettings {
+		trimmedKey := strings.TrimSpace(key)
+		trimmedValue := strings.TrimSpace(value)
+		if trimmedKey == "" {
+			return domain.ClusterConfig{}, fmt.Errorf("%w: master world setting key is required", domain.ErrInvalidClusterConfig)
+		}
+		if !domain.IsMasterControlledWorldSettingKey(trimmedKey) {
+			return domain.ClusterConfig{}, fmt.Errorf("%w: unsupported master world setting %q", domain.ErrInvalidClusterConfig, trimmedKey)
+		}
+		if trimmedValue == "" {
+			return domain.ClusterConfig{}, fmt.Errorf("%w: master world setting %q value is required", domain.ErrInvalidClusterConfig, trimmedKey)
+		}
+		normalizedMasterWorldSettings[trimmedKey] = trimmedValue
 	}
 
 	normalizedShards := make([]domain.ShardConfig, 0, len(config.Shards))
@@ -177,6 +200,9 @@ func normalizeClusterConfig(config domain.ClusterConfig) (domain.ClusterConfig, 
 			trimmedValue := strings.TrimSpace(value)
 			if trimmedKey == "" {
 				return domain.ClusterConfig{}, fmt.Errorf("%w: %s world override key is required", domain.ErrInvalidClusterConfig, shard.Name)
+			}
+			if domain.IsMasterControlledWorldSettingKey(trimmedKey) {
+				return domain.ClusterConfig{}, fmt.Errorf("%w: %s world override %q must be configured as a master world setting", domain.ErrInvalidClusterConfig, shard.Name, trimmedKey)
 			}
 			if trimmedValue == "" {
 				return domain.ClusterConfig{}, fmt.Errorf("%w: %s world override %q value is required", domain.ErrInvalidClusterConfig, shard.Name, trimmedKey)
@@ -226,9 +252,50 @@ func normalizeClusterConfig(config domain.ClusterConfig) (domain.ClusterConfig, 
 	slices.SortFunc(normalizedShards, func(a, b domain.ShardConfig) int {
 		return compareShardName(a.Name, b.Name)
 	})
+	config.MasterWorldSettings = normalizedMasterWorldSettings
 	config.Shards = normalizedShards
 
 	return config, nil
+}
+
+func splitMasterWorldSettings(config domain.ClusterConfig) domain.ClusterConfig {
+	masterWorldSettings := make(map[string]string, len(config.MasterWorldSettings))
+	for key, value := range config.MasterWorldSettings {
+		masterWorldSettings[key] = value
+	}
+
+	shards := append([]domain.ShardConfig(nil), config.Shards...)
+	for i := range shards {
+		shards[i].WorldGenOverrides = mapsClone(shards[i].WorldGenOverrides)
+		if shards[i].Name != domain.ShardMaster {
+			continue
+		}
+		for key, value := range shards[i].WorldGenOverrides {
+			if !domain.IsMasterControlledWorldSettingKey(key) {
+				continue
+			}
+			if _, exists := masterWorldSettings[key]; !exists {
+				masterWorldSettings[key] = value
+			}
+			delete(shards[i].WorldGenOverrides, key)
+		}
+	}
+
+	config.MasterWorldSettings = masterWorldSettings
+	config.Shards = shards
+	return config
+}
+
+func mapsClone(source map[string]string) map[string]string {
+	if source == nil {
+		return map[string]string{}
+	}
+
+	cloned := make(map[string]string, len(source))
+	for key, value := range source {
+		cloned[key] = value
+	}
+	return cloned
 }
 
 func compareShardName(a, b domain.ShardName) int {

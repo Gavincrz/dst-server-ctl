@@ -218,22 +218,23 @@ func TestClusterConfigRepositoryRoundTripsConfig(t *testing.T) {
 	defer store.Close()
 
 	config := domain.ClusterConfig{
-		ClusterName:        "Managed DST",
-		ClusterDescription: "Test cluster",
-		ClusterPassword:    "secret",
-		ClusterIntention:   "cooperative",
-		GameMode:           "survival",
-		MaxPlayers:         8,
-		Language:           "en",
-		PVP:                true,
-		PauseWhenEmpty:     false,
-		OfflineCluster:     true,
-		LANOnlyCluster:     false,
-		TickRate:           30,
-		ConsoleEnabled:     true,
-		BindIP:             "0.0.0.0",
-		MasterPort:         12000,
-		ClusterKey:         "cluster-abc",
+		ClusterName:         "Managed DST",
+		ClusterDescription:  "Test cluster",
+		ClusterPassword:     "secret",
+		ClusterIntention:    "cooperative",
+		GameMode:            "survival",
+		MaxPlayers:          8,
+		Language:            "en",
+		PVP:                 true,
+		PauseWhenEmpty:      false,
+		OfflineCluster:      true,
+		LANOnlyCluster:      false,
+		TickRate:            30,
+		ConsoleEnabled:      true,
+		BindIP:              "0.0.0.0",
+		MasterPort:          12000,
+		ClusterKey:          "cluster-abc",
+		MasterWorldSettings: map[string]string{"specialevent": "none", "spawnmode": "scatter"},
 		Shards: []domain.ShardConfig{
 			{Name: domain.ShardMaster, Enabled: true, ServerPort: 11000, MasterServerPort: 27020, AuthenticationPort: 8768, WorldGenPreset: "SURVIVAL_TOGETHER", WorldGenOverrides: map[string]string{"season_start": "autumn"}},
 			{Name: domain.ShardCaves, Enabled: false, ServerPort: 11001, MasterServerPort: 27021, AuthenticationPort: 8769, WorldGenPreset: "DST_CAVE", WorldGenOverrides: map[string]string{"wormattacks": "never"}},
@@ -274,6 +275,12 @@ func TestClusterConfigRepositoryRoundTripsConfig(t *testing.T) {
 	}
 	if got.Shards[0].WorldGenOverrides["season_start"] != "autumn" || got.Shards[1].WorldGenPreset != "DST_CAVE" {
 		t.Fatalf("shards = %#v, want persisted worldgen fields", got.Shards)
+	}
+	if got.MasterWorldSettings["specialevent"] != "none" || got.MasterWorldSettings["spawnmode"] != "scatter" {
+		t.Fatalf("MasterWorldSettings = %#v, want persisted master-controlled world settings", got.MasterWorldSettings)
+	}
+	if _, ok := got.Shards[0].WorldGenOverrides["specialevent"]; ok {
+		t.Fatalf("Master shard overrides = %#v, want master-controlled settings split out", got.Shards[0].WorldGenOverrides)
 	}
 }
 

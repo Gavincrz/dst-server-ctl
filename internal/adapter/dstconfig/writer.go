@@ -134,19 +134,26 @@ func renderWorldGenOverride(config domain.ClusterConfig, shardName domain.ShardN
 		return ""
 	}
 
+	overrides := cloneOverrides(shard.WorldGenOverrides)
+	if shardName == domain.ShardMaster {
+		for key, value := range config.MasterWorldSettings {
+			overrides[key] = value
+		}
+	}
+
 	var builder strings.Builder
 	builder.WriteString("return {\n")
 	builder.WriteString("\toverride_enabled = true,\n")
 	builder.WriteString(fmt.Sprintf("\tpreset = %q,\n", shard.WorldGenPreset))
 	builder.WriteString("\toverrides = {\n")
 
-	keys := make([]string, 0, len(shard.WorldGenOverrides))
-	for key := range shard.WorldGenOverrides {
+	keys := make([]string, 0, len(overrides))
+	for key := range overrides {
 		keys = append(keys, key)
 	}
 	slices.Sort(keys)
 	for _, key := range keys {
-		builder.WriteString(fmt.Sprintf("\t\t%s = %q,\n", key, shard.WorldGenOverrides[key]))
+		builder.WriteString(fmt.Sprintf("\t\t%s = %q,\n", key, overrides[key]))
 	}
 
 	builder.WriteString("\t},\n")
@@ -189,4 +196,16 @@ func findShard(shards []domain.ShardConfig, name domain.ShardName) (domain.Shard
 	}
 
 	return domain.ShardConfig{}, false
+}
+
+func cloneOverrides(source map[string]string) map[string]string {
+	if source == nil {
+		return map[string]string{}
+	}
+
+	cloned := make(map[string]string, len(source))
+	for key, value := range source {
+		cloned[key] = value
+	}
+	return cloned
 }

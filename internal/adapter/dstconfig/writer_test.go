@@ -16,22 +16,23 @@ func TestWriterWritesClusterAndShardConfigFiles(t *testing.T) {
 	layout := paths.ManagedLayout(t.TempDir())
 	writer := NewWriter(layout)
 	config := domain.ClusterConfig{
-		ClusterName:        "Managed DST",
-		ClusterDescription: "Test cluster",
-		ClusterPassword:    "secret",
-		ClusterIntention:   "cooperative",
-		GameMode:           "survival",
-		MaxPlayers:         8,
-		Language:           "en",
-		PVP:                true,
-		PauseWhenEmpty:     false,
-		OfflineCluster:     false,
-		LANOnlyCluster:     true,
-		TickRate:           30,
-		ConsoleEnabled:     true,
-		BindIP:             "0.0.0.0",
-		MasterPort:         12000,
-		ClusterKey:         "cluster-abc",
+		ClusterName:         "Managed DST",
+		ClusterDescription:  "Test cluster",
+		ClusterPassword:     "secret",
+		ClusterIntention:    "cooperative",
+		GameMode:            "survival",
+		MaxPlayers:          8,
+		Language:            "en",
+		PVP:                 true,
+		PauseWhenEmpty:      false,
+		OfflineCluster:      false,
+		LANOnlyCluster:      true,
+		TickRate:            30,
+		ConsoleEnabled:      true,
+		BindIP:              "0.0.0.0",
+		MasterPort:          12000,
+		ClusterKey:          "cluster-abc",
+		MasterWorldSettings: map[string]string{"specialevent": "none"},
 		Shards: []domain.ShardConfig{
 			{Name: domain.ShardMaster, Enabled: true, ServerPort: 11000, MasterServerPort: 27020, AuthenticationPort: 8768, WorldGenPreset: "SURVIVAL_TOGETHER", WorldGenOverrides: map[string]string{"season_start": "autumn"}},
 			{Name: domain.ShardCaves, Enabled: true, ServerPort: 11001, MasterServerPort: 27021, AuthenticationPort: 8769, WorldGenPreset: "DST_CAVE", WorldGenOverrides: map[string]string{"wormattacks": "never"}},
@@ -93,6 +94,9 @@ func TestWriterWritesClusterAndShardConfigFiles(t *testing.T) {
 	if !strings.Contains(masterWorldGen, `season_start = "autumn"`) {
 		t.Fatalf("Master/worldgenoverride.lua = %q, want season_start override", masterWorldGen)
 	}
+	if !strings.Contains(masterWorldGen, `specialevent = "none"`) {
+		t.Fatalf("Master/worldgenoverride.lua = %q, want master world setting override", masterWorldGen)
+	}
 
 	cavesWorldGen := readFile(t, filepath.Join(paths.ManagedShardDir(layout, domain.ShardCaves), "worldgenoverride.lua"))
 	if !strings.Contains(cavesWorldGen, `preset = "DST_CAVE"`) {
@@ -107,13 +111,14 @@ func TestWriterRemovesDisabledShardServerINI(t *testing.T) {
 	layout := paths.ManagedLayout(t.TempDir())
 	writer := NewWriter(layout)
 	config := domain.ClusterConfig{
-		ClusterName:      "Managed DST",
-		ClusterIntention: "cooperative",
-		GameMode:         "survival",
-		MaxPlayers:       6,
-		Language:         "en",
-		PauseWhenEmpty:   true,
-		TickRate:         15,
+		ClusterName:         "Managed DST",
+		ClusterIntention:    "cooperative",
+		GameMode:            "survival",
+		MaxPlayers:          6,
+		Language:            "en",
+		PauseWhenEmpty:      true,
+		TickRate:            15,
+		MasterWorldSettings: map[string]string{},
 		Shards: []domain.ShardConfig{
 			{Name: domain.ShardMaster, Enabled: true, ServerPort: 10999, MasterServerPort: 27016, AuthenticationPort: 8766, WorldGenPreset: "SURVIVAL_TOGETHER", WorldGenOverrides: map[string]string{}},
 			{Name: domain.ShardCaves, Enabled: true, ServerPort: 11000, MasterServerPort: 27017, AuthenticationPort: 8767, WorldGenPreset: "DST_CAVE", WorldGenOverrides: map[string]string{}},

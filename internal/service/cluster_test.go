@@ -46,7 +46,7 @@ func TestClusterConfigServiceInitializeReturnsExistingConfig(t *testing.T) {
 		Language:         "en",
 		TickRate:         15,
 		Shards: []domain.ShardConfig{
-			{Name: domain.ShardMaster, Enabled: true, ServerPort: 10999, MasterServerPort: 27016, AuthenticationPort: 8766, WorldGenPreset: "SURVIVAL_TOGETHER", WorldGenOverrides: map[string]string{}},
+			{Name: domain.ShardMaster, Enabled: true, ServerPort: 10999, MasterServerPort: 27016, AuthenticationPort: 8766, WorldGenPreset: "SURVIVAL_TOGETHER", WorldGenOverrides: map[string]string{"specialevent": "none"}},
 		},
 		CreatedAt: time.Date(2026, 4, 24, 8, 0, 0, 0, time.UTC),
 		UpdatedAt: time.Date(2026, 4, 24, 8, 0, 0, 0, time.UTC),
@@ -61,6 +61,12 @@ func TestClusterConfigServiceInitializeReturnsExistingConfig(t *testing.T) {
 
 	if config.ClusterName != existing.ClusterName {
 		t.Fatalf("ClusterName = %q, want %q", config.ClusterName, existing.ClusterName)
+	}
+	if config.MasterWorldSettings["specialevent"] != "none" {
+		t.Fatalf("MasterWorldSettings = %#v, want specialevent to be split from Master overrides", config.MasterWorldSettings)
+	}
+	if _, ok := config.Shards[0].WorldGenOverrides["specialevent"]; ok {
+		t.Fatalf("Master shard overrides = %#v, want specialevent removed", config.Shards[0].WorldGenOverrides)
 	}
 	if repo.saved != nil {
 		t.Fatal("expected Initialize() not to overwrite existing config")
@@ -92,22 +98,23 @@ func TestClusterConfigServiceUpdateNormalizesAndPersists(t *testing.T) {
 	service.now = func() time.Time { return updatedAt }
 
 	config, err := service.Update(ctx, domain.ClusterConfig{
-		ClusterName:        "  New Cluster  ",
-		ClusterDescription: "  test  ",
-		ClusterPassword:    "  secret  ",
-		ClusterIntention:   " social ",
-		GameMode:           " endless ",
-		MaxPlayers:         12,
-		Language:           " en ",
-		PVP:                true,
-		PauseWhenEmpty:     false,
-		OfflineCluster:     true,
-		LANOnlyCluster:     false,
-		TickRate:           30,
-		ConsoleEnabled:     true,
-		BindIP:             " 0.0.0.0 ",
-		MasterPort:         12000,
-		ClusterKey:         " cluster-1 ",
+		ClusterName:         "  New Cluster  ",
+		ClusterDescription:  "  test  ",
+		ClusterPassword:     "  secret  ",
+		ClusterIntention:    " social ",
+		GameMode:            " endless ",
+		MaxPlayers:          12,
+		Language:            " en ",
+		PVP:                 true,
+		PauseWhenEmpty:      false,
+		OfflineCluster:      true,
+		LANOnlyCluster:      false,
+		TickRate:            30,
+		ConsoleEnabled:      true,
+		BindIP:              " 0.0.0.0 ",
+		MasterPort:          12000,
+		ClusterKey:          " cluster-1 ",
+		MasterWorldSettings: map[string]string{"specialevent": " none ", "spawnmode": " scatter "},
 		Shards: []domain.ShardConfig{
 			{Name: domain.ShardCaves, Enabled: false, ServerPort: 11001, MasterServerPort: 27018, AuthenticationPort: 8768, WorldGenPreset: "DST_CAVE_PLUS", WorldGenOverrides: map[string]string{"wormattacks": "never"}},
 			{Name: domain.ShardMaster, Enabled: true, ServerPort: 11000, MasterServerPort: 27017, AuthenticationPort: 8767, WorldGenPreset: "SURVIVAL_TOGETHER_CLASSIC", WorldGenOverrides: map[string]string{"season_start": "autumn"}},
@@ -131,6 +138,9 @@ func TestClusterConfigServiceUpdateNormalizesAndPersists(t *testing.T) {
 	}
 	if len(config.Shards) != 2 || config.Shards[0].Name != domain.ShardMaster {
 		t.Fatalf("Shards = %#v, want Master first", config.Shards)
+	}
+	if config.MasterWorldSettings["specialevent"] != "none" || config.MasterWorldSettings["spawnmode"] != "scatter" {
+		t.Fatalf("MasterWorldSettings = %#v, want trimmed master world settings", config.MasterWorldSettings)
 	}
 	if writer.written == nil || writer.written.ClusterName != "New Cluster" {
 		t.Fatalf("writer config = %#v, want updated cluster config", writer.written)

@@ -846,25 +846,26 @@ type updateResponse struct {
 }
 
 type clusterResponse struct {
-	ClusterName        string          `json:"clusterName"`
-	ClusterDescription string          `json:"clusterDescription"`
-	ClusterPassword    string          `json:"clusterPassword"`
-	ClusterIntention   string          `json:"clusterIntention"`
-	GameMode           string          `json:"gameMode"`
-	MaxPlayers         int             `json:"maxPlayers"`
-	Language           string          `json:"language"`
-	PVP                bool            `json:"pvp"`
-	PauseWhenEmpty     bool            `json:"pauseWhenEmpty"`
-	OfflineCluster     bool            `json:"offlineCluster"`
-	LANOnlyCluster     bool            `json:"lanOnlyCluster"`
-	TickRate           int             `json:"tickRate"`
-	ConsoleEnabled     bool            `json:"consoleEnabled"`
-	BindIP             string          `json:"bindIP"`
-	MasterPort         int             `json:"masterPort"`
-	ClusterKey         string          `json:"clusterKey"`
-	Shards             []shardResponse `json:"shards"`
-	CreatedAt          time.Time       `json:"createdAt"`
-	UpdatedAt          time.Time       `json:"updatedAt"`
+	ClusterName         string                  `json:"clusterName"`
+	ClusterDescription  string                  `json:"clusterDescription"`
+	ClusterPassword     string                  `json:"clusterPassword"`
+	ClusterIntention    string                  `json:"clusterIntention"`
+	GameMode            string                  `json:"gameMode"`
+	MaxPlayers          int                     `json:"maxPlayers"`
+	Language            string                  `json:"language"`
+	PVP                 bool                    `json:"pvp"`
+	PauseWhenEmpty      bool                    `json:"pauseWhenEmpty"`
+	OfflineCluster      bool                    `json:"offlineCluster"`
+	LANOnlyCluster      bool                    `json:"lanOnlyCluster"`
+	TickRate            int                     `json:"tickRate"`
+	ConsoleEnabled      bool                    `json:"consoleEnabled"`
+	BindIP              string                  `json:"bindIP"`
+	MasterPort          int                     `json:"masterPort"`
+	ClusterKey          string                  `json:"clusterKey"`
+	MasterWorldSettings []worldOverrideResponse `json:"masterWorldSettings"`
+	Shards              []shardResponse         `json:"shards"`
+	CreatedAt           time.Time               `json:"createdAt"`
+	UpdatedAt           time.Time               `json:"updatedAt"`
 }
 
 type shardResponse struct {
@@ -925,23 +926,24 @@ type dashboardResponse struct {
 }
 
 type updateClusterRequest struct {
-	ClusterName        string        `json:"clusterName"`
-	ClusterDescription string        `json:"clusterDescription"`
-	ClusterPassword    string        `json:"clusterPassword"`
-	ClusterIntention   string        `json:"clusterIntention"`
-	GameMode           string        `json:"gameMode"`
-	MaxPlayers         int           `json:"maxPlayers"`
-	Language           string        `json:"language"`
-	PVP                bool          `json:"pvp"`
-	PauseWhenEmpty     bool          `json:"pauseWhenEmpty"`
-	OfflineCluster     bool          `json:"offlineCluster"`
-	LANOnlyCluster     bool          `json:"lanOnlyCluster"`
-	TickRate           int           `json:"tickRate"`
-	ConsoleEnabled     bool          `json:"consoleEnabled"`
-	BindIP             string        `json:"bindIP"`
-	MasterPort         int           `json:"masterPort"`
-	ClusterKey         string        `json:"clusterKey"`
-	Shards             []shardConfig `json:"shards"`
+	ClusterName         string                 `json:"clusterName"`
+	ClusterDescription  string                 `json:"clusterDescription"`
+	ClusterPassword     string                 `json:"clusterPassword"`
+	ClusterIntention    string                 `json:"clusterIntention"`
+	GameMode            string                 `json:"gameMode"`
+	MaxPlayers          int                    `json:"maxPlayers"`
+	Language            string                 `json:"language"`
+	PVP                 bool                   `json:"pvp"`
+	PauseWhenEmpty      bool                   `json:"pauseWhenEmpty"`
+	OfflineCluster      bool                   `json:"offlineCluster"`
+	LANOnlyCluster      bool                   `json:"lanOnlyCluster"`
+	TickRate            int                    `json:"tickRate"`
+	ConsoleEnabled      bool                   `json:"consoleEnabled"`
+	BindIP              string                 `json:"bindIP"`
+	MasterPort          int                    `json:"masterPort"`
+	ClusterKey          string                 `json:"clusterKey"`
+	MasterWorldSettings []worldOverrideRequest `json:"masterWorldSettings"`
+	Shards              []shardConfig          `json:"shards"`
 }
 
 type updateStartRequest struct {
@@ -1009,6 +1011,16 @@ func updateResponseFromDomain(state domain.UpdateState) updateResponse {
 }
 
 func clusterResponseFromDomain(config domain.ClusterConfig) clusterResponse {
+	masterWorldSettings := make([]worldOverrideResponse, 0, len(config.MasterWorldSettings))
+	masterWorldKeys := make([]string, 0, len(config.MasterWorldSettings))
+	for key := range config.MasterWorldSettings {
+		masterWorldKeys = append(masterWorldKeys, key)
+	}
+	slices.Sort(masterWorldKeys)
+	for _, key := range masterWorldKeys {
+		masterWorldSettings = append(masterWorldSettings, worldOverrideResponse{Key: key, Value: config.MasterWorldSettings[key]})
+	}
+
 	shards := make([]shardResponse, 0, len(config.Shards))
 	for _, shard := range config.Shards {
 		overrides := make([]worldOverrideResponse, 0, len(shard.WorldGenOverrides))
@@ -1032,25 +1044,26 @@ func clusterResponseFromDomain(config domain.ClusterConfig) clusterResponse {
 	}
 
 	return clusterResponse{
-		ClusterName:        config.ClusterName,
-		ClusterDescription: config.ClusterDescription,
-		ClusterPassword:    config.ClusterPassword,
-		ClusterIntention:   config.ClusterIntention,
-		GameMode:           config.GameMode,
-		MaxPlayers:         config.MaxPlayers,
-		Language:           config.Language,
-		PVP:                config.PVP,
-		PauseWhenEmpty:     config.PauseWhenEmpty,
-		OfflineCluster:     config.OfflineCluster,
-		LANOnlyCluster:     config.LANOnlyCluster,
-		TickRate:           config.TickRate,
-		ConsoleEnabled:     config.ConsoleEnabled,
-		BindIP:             config.BindIP,
-		MasterPort:         config.MasterPort,
-		ClusterKey:         config.ClusterKey,
-		Shards:             shards,
-		CreatedAt:          config.CreatedAt,
-		UpdatedAt:          config.UpdatedAt,
+		ClusterName:         config.ClusterName,
+		ClusterDescription:  config.ClusterDescription,
+		ClusterPassword:     config.ClusterPassword,
+		ClusterIntention:    config.ClusterIntention,
+		GameMode:            config.GameMode,
+		MaxPlayers:          config.MaxPlayers,
+		Language:            config.Language,
+		PVP:                 config.PVP,
+		PauseWhenEmpty:      config.PauseWhenEmpty,
+		OfflineCluster:      config.OfflineCluster,
+		LANOnlyCluster:      config.LANOnlyCluster,
+		TickRate:            config.TickRate,
+		ConsoleEnabled:      config.ConsoleEnabled,
+		BindIP:              config.BindIP,
+		MasterPort:          config.MasterPort,
+		ClusterKey:          config.ClusterKey,
+		MasterWorldSettings: masterWorldSettings,
+		Shards:              shards,
+		CreatedAt:           config.CreatedAt,
+		UpdatedAt:           config.UpdatedAt,
 	}
 }
 
@@ -1087,6 +1100,11 @@ func runtimeHistoryResponseFromDomain(events []domain.RuntimeEvent) []runtimeHis
 }
 
 func (r updateClusterRequest) toDomain() domain.ClusterConfig {
+	masterWorldSettings := make(map[string]string, len(r.MasterWorldSettings))
+	for _, override := range r.MasterWorldSettings {
+		masterWorldSettings[override.Key] = override.Value
+	}
+
 	shards := make([]domain.ShardConfig, 0, len(r.Shards))
 	for _, shard := range r.Shards {
 		overrides := make(map[string]string, len(shard.WorldGenOverrides))
@@ -1105,23 +1123,24 @@ func (r updateClusterRequest) toDomain() domain.ClusterConfig {
 	}
 
 	return domain.ClusterConfig{
-		ClusterName:        r.ClusterName,
-		ClusterDescription: r.ClusterDescription,
-		ClusterPassword:    r.ClusterPassword,
-		ClusterIntention:   r.ClusterIntention,
-		GameMode:           r.GameMode,
-		MaxPlayers:         r.MaxPlayers,
-		Language:           r.Language,
-		PVP:                r.PVP,
-		PauseWhenEmpty:     r.PauseWhenEmpty,
-		OfflineCluster:     r.OfflineCluster,
-		LANOnlyCluster:     r.LANOnlyCluster,
-		TickRate:           r.TickRate,
-		ConsoleEnabled:     r.ConsoleEnabled,
-		BindIP:             r.BindIP,
-		MasterPort:         r.MasterPort,
-		ClusterKey:         r.ClusterKey,
-		Shards:             shards,
+		ClusterName:         r.ClusterName,
+		ClusterDescription:  r.ClusterDescription,
+		ClusterPassword:     r.ClusterPassword,
+		ClusterIntention:    r.ClusterIntention,
+		GameMode:            r.GameMode,
+		MaxPlayers:          r.MaxPlayers,
+		Language:            r.Language,
+		PVP:                 r.PVP,
+		PauseWhenEmpty:      r.PauseWhenEmpty,
+		OfflineCluster:      r.OfflineCluster,
+		LANOnlyCluster:      r.LANOnlyCluster,
+		TickRate:            r.TickRate,
+		ConsoleEnabled:      r.ConsoleEnabled,
+		BindIP:              r.BindIP,
+		MasterPort:          r.MasterPort,
+		ClusterKey:          r.ClusterKey,
+		MasterWorldSettings: masterWorldSettings,
+		Shards:              shards,
 	}
 }
 

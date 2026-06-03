@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  cavesWorldSettingFields,
   clusterFormFromConfig,
   clusterFormIsDirty,
   clusterRequestFromForm,
+  masterWorldControlSettingFields,
+  masterWorldGenSettingFields,
   type ClusterConfig,
   type ClusterFormState
 } from './clusterForm';
@@ -26,6 +29,7 @@ function sampleConfig(): ClusterConfig {
     bindIP: '127.0.0.1',
     masterPort: 10888,
     clusterKey: 'dst-server-ctl',
+    masterWorldSettings: [],
     shards: [
       {
         name: 'Master',
@@ -249,6 +253,27 @@ describe('clusterForm helpers', () => {
       bindIP: '0.0.0.0',
       masterPort: 12000,
       clusterKey: 'cluster-abc',
+      masterWorldSettings: [
+        { key: 'beefaloheat', value: 'often' },
+        { key: 'boons', value: 'always' },
+        { key: 'crow_carnival', value: 'enabled' },
+        { key: 'darkness', value: 'nonlethal' },
+        { key: 'dropeverythingondespawn', value: 'always' },
+        { key: 'ghostenabled', value: 'always' },
+        { key: 'ghostsanitydrain', value: 'none' },
+        { key: 'healthpenalty', value: 'none' },
+        { key: 'hunger', value: 'default' },
+        { key: 'krampus', value: 'rare' },
+        { key: 'portalresurection', value: 'always' },
+        { key: 'resettime', value: 'fast' },
+        { key: 'roads', value: 'often' },
+        { key: 'spawnmode', value: 'scatter' },
+        { key: 'spawnprotection', value: 'always' },
+        { key: 'specialevent', value: 'none' },
+        { key: 'temperaturedamage', value: 'nonlethal' },
+        { key: 'touchstone', value: 'rare' },
+        { key: 'winters_feast', value: 'enabled' }
+      ],
       shards: [
         {
           name: 'Master',
@@ -260,44 +285,25 @@ describe('clusterForm helpers', () => {
           worldGenOverrides: [
             { key: 'autumn', value: 'longseason' },
             { key: 'bearger', value: 'rare' },
-            { key: 'beefaloheat', value: 'often' },
-            { key: 'boons', value: 'always' },
             { key: 'branching', value: 'most' },
-            { key: 'crow_carnival', value: 'enabled' },
-            { key: 'darkness', value: 'nonlethal' },
             { key: 'day', value: 'longday' },
-            { key: 'dropeverythingondespawn', value: 'always' },
-            { key: 'ghostenabled', value: 'always' },
-            { key: 'ghostsanitydrain', value: 'none' },
-            { key: 'healthpenalty', value: 'none' },
             { key: 'hounds', value: 'default' },
-            { key: 'hunger', value: 'default' },
             { key: 'junkyard', value: 'default' },
-            { key: 'krampus', value: 'rare' },
             { key: 'lightning', value: 'rare' },
             { key: 'loop', value: 'always' },
             { key: 'moon_fissure', value: 'mostly' },
             { key: 'petrification', value: 'many' },
-            { key: 'portalresurection', value: 'always' },
             { key: 'prefabswaps_start', value: 'highly random' },
-            { key: 'resettime', value: 'fast' },
-            { key: 'roads', value: 'often' },
             { key: 'season_start', value: 'autumn' },
-            { key: 'spawnmode', value: 'scatter' },
-            { key: 'spawnprotection', value: 'always' },
-            { key: 'specialevent', value: 'none' },
             { key: 'stageplays', value: 'never' },
             { key: 'start_location', value: 'plus' },
             { key: 'summerhounds', value: 'never' },
             { key: 'task_set', value: 'classic' },
-            { key: 'temperaturedamage', value: 'nonlethal' },
             { key: 'terrariumchest', value: 'default' },
-            { key: 'touchstone', value: 'rare' },
             { key: 'weather', value: 'often' },
             { key: 'wildfires', value: 'never' },
             { key: 'winter', value: 'default' },
             { key: 'winterhounds', value: 'default' },
-            { key: 'winters_feast', value: 'enabled' },
             { key: 'world_size', value: 'huge' }
           ]
         },
@@ -329,6 +335,12 @@ describe('clusterForm helpers', () => {
 
   it('preserves unknown world overrides in the extra overrides textarea', () => {
     const config = sampleConfig();
+    config.masterWorldSettings = [
+      { key: 'ghostsanitydrain', value: 'none' },
+      { key: 'beefaloheat', value: 'often' },
+      { key: 'portalresurection', value: 'always' },
+      { key: 'winters_feast', value: 'enabled' }
+    ];
     config.shards[0].worldGenOverrides = [
       { key: 'season_start', value: 'autumn' },
       { key: 'world_size', value: 'huge' },
@@ -338,10 +350,6 @@ describe('clusterForm helpers', () => {
       { key: 'hounds', value: 'rare' },
       { key: 'spawnprotection', value: 'always' },
       { key: 'specialevent', value: 'none' },
-      { key: 'ghostsanitydrain', value: 'none' },
-      { key: 'beefaloheat', value: 'often' },
-      { key: 'portalresurection', value: 'always' },
-      { key: 'winters_feast', value: 'enabled' },
       { key: 'beefalo', value: 'often' }
     ];
 
@@ -368,5 +376,18 @@ describe('clusterForm helpers', () => {
     form.clusterName = 'New Cluster';
 
     expect(clusterFormIsDirty(form, config)).toBe(true);
+  });
+
+  it('splits master shard generation fields from master-controlled rules', () => {
+    expect(masterWorldGenSettingFields.some((field) => field.formKey === 'seasonStart')).toBe(true);
+    expect(masterWorldGenSettingFields.some((field) => field.formKey === 'specialEvent')).toBe(false);
+    expect(masterWorldGenSettingFields.some((field) => field.formKey === 'wormAttacks')).toBe(false);
+
+    expect(masterWorldControlSettingFields.some((field) => field.formKey === 'specialEvent')).toBe(true);
+    expect(masterWorldControlSettingFields.some((field) => field.formKey === 'portalResurrection')).toBe(true);
+    expect(masterWorldControlSettingFields.some((field) => field.formKey === 'seasonStart')).toBe(false);
+
+    expect(cavesWorldSettingFields.some((field) => field.formKey === 'wormAttacks')).toBe(true);
+    expect(cavesWorldSettingFields.some((field) => field.formKey === 'specialEvent')).toBe(false);
   });
 });

@@ -176,11 +176,21 @@
 - 2026-06-02 已继续补 `WORLDGEN_GROUP / misc` 中森林专属字段：
   `moon_fissure`、`balatro`。
   其中 `moon_fissure` 使用真实 `worldgen_frequency_descriptions` 值域，而不是复用普通 runtime frequency 枚举。
+- 2026-06-02 已先把前端世界字段的语义边界收敛一轮：
+  不再仅靠 `masterWorldSettingFields` / `cavesWorldSettingFields` 的排除式过滤维持表单，而是显式区分
+  “Master shard worldgen/world rules” 与 “master-controlled survivor/event rules”。
+  当前仍保持 API、存储和 writer 兼容，master-controlled 字段继续写入 Master 的 `worldgenoverride.lua`。
+- 2026-06-03 已继续把上述边界收敛到后端模型：
+  `cluster` API / domain 现已显式增加 cluster 级 `masterWorldSettings`，用于承载
+  `master-controlled` worldsettings；SQLite 读写保持对现有表结构兼容，writer 仍在生成
+  `Master/worldgenoverride.lua` 时把这组设置并入落盘内容。
+  当前前端表单仍沿用现有 `masterWorldSettings` 表单状态，但请求构造时已把
+  “Master shard worldgen/world rules” 与 “cluster-wide master-controlled rules” 拆成不同 API 字段。
 - 仍保留 “extra world overrides” 文本框，用于透传尚未结构化的世界项。
 - 2026-06-02 已基于最新受管安装产物中的 `scripts/map/customize.lua` 与 `scripts/worldsettings_overrides.lua` 完成二次实物核对；下一批应优先从真实 `WORLDSETTINGS_GROUP` / `WORLDGEN_GROUP` 中挑高价值字段，而不是继续凭印象补项。
 
 下一步：
-评估是否把 master-controlled worldsettings 从当前 per-shard overrides 进一步收敛成更清晰的子模型或分组表单，并继续补尚未结构化的节庆、突变或其余高价值 `WORLDGEN_GROUP` 字段。
+在已完成前后端分组收敛的基础上，继续把世界配置模型向“客户端语义分组”推进，并继续补尚未结构化的节庆、突变或其余高价值 `WORLDGEN_GROUP` / `WORLDSETTINGS_GROUP` 字段。
 
 ### T-011 | todo | 核实语言配置边界
 
